@@ -1,0 +1,1 @@
+Sprites which the firmware always assumes are available should be placed here and included via the src/resources.rs file

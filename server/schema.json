@@ -1,0 +1,466 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Configuration",
+  "type": "object",
+  "properties": {
+    "screens": {
+      "description": "Array of screens to display. For now only the first screen is acutally read.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Screen"
+      }
+    },
+    "text_styles": {
+      "description": "Map of text styles",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/TextStyle"
+      }
+    }
+  },
+  "required": [
+    "screens",
+    "text_styles"
+  ],
+  "$defs": {
+    "Alignment": {
+      "type": "string",
+      "enum": [
+        "Left",
+        "Center",
+        "Right"
+      ]
+    },
+    "Element": {
+      "oneOf": [
+        {
+          "description": "Display a text element at the given position",
+          "type": "object",
+          "properties": {
+            "Text": {
+              "type": "object",
+              "properties": {
+                "align": {
+                  "description": "How to align the text",
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/Alignment"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "position": {
+                  "description": "Position of the text. If not specified will be 0,0.\nThis is useful if this item is added nested in a layout",
+                  "$ref": "#/$defs/Point"
+                },
+                "style": {
+                  "description": "One of the styles from the text_styles map",
+                  "type": "string"
+                },
+                "text": {
+                  "description": "The text that should be displayed",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "style",
+                "text",
+                "position"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "Text"
+          ]
+        },
+        {
+          "description": "Display a sprite at the given position",
+          "type": "object",
+          "properties": {
+            "Sprite": {
+              "type": "object",
+              "properties": {
+                "center": {
+                  "description": "Center the sprite around a given point",
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/Point"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "name": {
+                  "description": "Name of the sprite. Must exist in the sprite directory. Does not include the file extension.",
+                  "type": "string"
+                },
+                "position": {
+                  "description": "Position of the sprite. If not specified will be 0,0.\nThis is useful if this item is added nested in a layout",
+                  "$ref": "#/$defs/Point"
+                }
+              },
+              "required": [
+                "position",
+                "name"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "Sprite"
+          ]
+        },
+        {
+          "description": "Draw a line",
+          "type": "object",
+          "properties": {
+            "Line": {
+              "type": "object",
+              "properties": {
+                "color": {
+                  "description": "Color of the line",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "end": {
+                  "description": "End of the line",
+                  "$ref": "#/$defs/Point"
+                },
+                "start": {
+                  "description": "Start of the line",
+                  "$ref": "#/$defs/Point"
+                },
+                "stroke": {
+                  "description": "Width of the line",
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "start",
+                "end"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "Line"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "Polyline": {
+              "type": "object",
+              "properties": {
+                "color": {
+                  "description": "Color of the line",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "points": {
+                  "description": "Points of the polyline",
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/Point"
+                  }
+                },
+                "stroke": {
+                  "description": "Width of the line",
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "uint32",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "points"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "Polyline"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "Rectangle": {
+              "type": "object",
+              "properties": {
+                "fill_color": {
+                  "description": "Fill color",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "rounded_corners": {
+                  "description": "Corner radi of a rounded rectangle",
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/RectangleCorners"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "size": {
+                  "description": "width of the rectangle",
+                  "$ref": "#/$defs/Size"
+                },
+                "stroke": {
+                  "description": "Stroke width of the rectangles stroke",
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "uint32",
+                  "minimum": 0
+                },
+                "stroke_color": {
+                  "description": "Color of the rectangle stroke",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "top_left": {
+                  "description": "top left position of the rectangle",
+                  "$ref": "#/$defs/Point"
+                }
+              },
+              "required": [
+                "top_left",
+                "size"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "Rectangle"
+          ]
+        }
+      ]
+    },
+    "FontName": {
+      "type": "string",
+      "enum": [
+        "Font4X6",
+        "Font5X7",
+        "Font5X8",
+        "Font6X9",
+        "Font6X10",
+        "Font6X12",
+        "Font6X13",
+        "Font6X13Bold",
+        "Font6X13Italic",
+        "Font7X13",
+        "Font7X13Bold",
+        "Font7X13Italic",
+        "Font7X14",
+        "Font7X14Bold",
+        "Font8X13",
+        "Font8X13Bold",
+        "Font8X13Italic",
+        "Font9X15",
+        "Font9X15Bold",
+        "Font9X18",
+        "Font9X18Bold",
+        "Font10X20",
+        "Profont7",
+        "Profont9",
+        "Profont10",
+        "Profont12",
+        "Profont14",
+        "Profont18",
+        "Profont24"
+      ]
+    },
+    "Point": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "description": "X position of the point",
+          "type": "integer",
+          "format": "int32",
+          "maximum": 192,
+          "minimum": 0
+        },
+        "y": {
+          "description": "Y position of the point",
+          "type": "integer",
+          "format": "int32",
+          "maximum": 96,
+          "minimum": 0
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ]
+    },
+    "RectangleCorners": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "Uniform": {
+              "$ref": "#/$defs/Size"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "Uniform"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "Different": {
+              "type": "object",
+              "properties": {
+                "bottom_left": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/Size"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "bottom_right": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/Size"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "top_left": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/Size"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "top_right": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/Size"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "Different"
+          ]
+        }
+      ]
+    },
+    "Screen": {
+      "type": "object",
+      "properties": {
+        "elements": {
+          "description": "Array of elements to display on the screen",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Element"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "elements"
+      ]
+    },
+    "Size": {
+      "type": "object",
+      "properties": {
+        "height": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "width": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "width",
+        "height"
+      ]
+    },
+    "TextStyle": {
+      "type": "object",
+      "properties": {
+        "background_color": {
+          "description": "Background color of the font",
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-fA-F]{6}$"
+        },
+        "font": {
+          "description": "Font to use for the text",
+          "$ref": "#/$defs/FontName"
+        },
+        "strikethrough": {
+          "description": "Wether to strikethrough the text or not",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "text_color": {
+          "description": "Foreground color of the text",
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{6}$"
+        },
+        "underline": {
+          "description": "Wether to underline the text or not",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "text_color",
+        "font"
+      ]
+    }
+  }
+}

@@ -1,0 +1,33 @@
+name: Embedded Firmware
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Cache esp-rust toolchain
+      uses: actions/cache@v4
+      id: cache-rust
+      with:
+          path: |
+            ~/export-esp.sh
+            ~/.cargo
+            ~/.rustup
+            ~/.espup
+          key: "esp-toolchain"
+
+    - name: Install the toolchain
+      run: cargo install --locked espup && espup install
+    - name: Build the embedded firmware
+      run: . ~/export-esp.sh && cd embedded && cp config.toml.template config.toml && cargo build --release --verbose

@@ -1,0 +1,288 @@
+[U1H]
+frames = [
+    "U1H1.qoi",
+    "U1H2.qoi",
+    "U1H3.qoi",
+    "U1H4.qoi",
+    "U1H5.qoi",
+    "U1H6.qoi",
+    "U1H7.qoi",
+    "U1H8.qoi",
+    "U1H9.qoi",
+]
+frame_time = 300
+
+[U1R]
+frames = [
+    "U1R1.qoi",
+    "U1R2.qoi",
+    "U1R3.qoi",
+    "U1R4.qoi",
+    "U1R5.qoi",
+    "U1R6.qoi",
+    "U1R7.qoi",
+    "U1R8.qoi",
+    "U1R9.qoi",
+]
+frame_time = 300
+
+[U2H]
+frames = [
+    "U2H1.qoi",
+    "U2H2.qoi",
+    "U2H3.qoi",
+    "U2H4.qoi",
+    "U2H5.qoi",
+    "U2H6.qoi",
+    "U2H7.qoi",
+    "U2H8.qoi",
+    "U2H9.qoi",
+]
+frame_time = 300
+
+[U2R]
+frames = [
+    "U2R1.qoi",
+    "U2R2.qoi",
+    "U2R3.qoi",
+    "U2R4.qoi",
+    "U2R5.qoi",
+    "U2R6.qoi",
+    "U2R7.qoi",
+    "U2R8.qoi",
+    "U2R9.qoi",
+]
+frame_time = 300
+
+[U3H]
+frames = [
+    "U3H1.qoi",
+    "U3H2.qoi",
+    "U3H3.qoi",
+    "U3H4.qoi",
+    "U3H5.qoi",
+    "U3H6.qoi",
+    "U3H7.qoi",
+    "U3H8.qoi",
+    "U3H9.qoi",
+]
+frame_time = 300
+
+[U3R]
+frames = [
+    "U3R1.qoi",
+    "U3R2.qoi",
+    "U3R3.qoi",
+    "U3R4.qoi",
+    "U3R5.qoi",
+    "U3R6.qoi",
+    "U3R7.qoi",
+    "U3R8.qoi",
+    "U3R9.qoi",
+]
+frame_time = 300
+
+[U4H]
+frames = [
+    "U4H1.qoi",
+    "U4H2.qoi",
+    "U4H3.qoi",
+    "U4H4.qoi",
+    "U4H5.qoi",
+    "U4H6.qoi",
+    "U4H7.qoi",
+    "U4H8.qoi",
+    "U4H9.qoi",
+]
+frame_time = 300
+
+[U4R]
+frames = [
+    "U4R1.qoi",
+    "U4R2.qoi",
+    "U4R3.qoi",
+    "U4R4.qoi",
+    "U4R5.qoi",
+    "U4R6.qoi",
+    "U4R7.qoi",
+    "U4R8.qoi",
+    "U4R9.qoi",
+]
+frame_time = 300
+
+[U6H]
+frames = [
+    "U6H1.qoi",
+    "U6H2.qoi",
+    "U6H3.qoi",
+    "U6H4.qoi",
+    "U6H5.qoi",
+    "U6H6.qoi",
+    "U6H7.qoi",
+    "U6H8.qoi",
+    "U6H9.qoi",
+]
+frame_time = 300
+
+[U6R]
+frames = [
+    "U6R1.qoi",
+    "U6R2.qoi",
+    "U6R3.qoi",
+    "U6R4.qoi",
+    "U6R5.qoi",
+    "U6R6.qoi",
+    "U6R7.qoi",
+    "U6R8.qoi",
+    "U6R9.qoi",
+]
+frame_time = 300
+
+[WLBR]
+frames = [
+    "WLBR1.qoi",
+    "WLBR2.qoi",
+    "WLBR3.qoi",
+    "WLBR4.qoi",
+    "WLBR5.qoi",
+    "WLBR6.qoi",
+    "WLBR7.qoi",
+    "WLBR8.qoi",
+    "WLBR9.qoi",
+]
+frame_time = 300
+
+[WLBH]
+frames = [
+    "WLBH1.qoi",
+    "WLBH2.qoi",
+    "WLBH3.qoi",
+    "WLBH4.qoi",
+    "WLBH5.qoi",
+    "WLBH6.qoi",
+    "WLBH7.qoi",
+    "WLBH8.qoi",
+    "WLBH9.qoi",
+]
+frame_time = 300
+
+[62R]
+frames = [
+    "62R1.qoi",
+    "62R2.qoi",
+    "62R3.qoi",
+    "62R4.qoi",
+    "62R5.qoi",
+    "62R6.qoi",
+    "62R7.qoi",
+    "62R8.qoi",
+    "62R9.qoi",
+]
+frame_time = 300
+
+[62H]
+frames = [
+    "62H1.qoi",
+    "62H2.qoi",
+    "62H3.qoi",
+    "62H4.qoi",
+    "62H5.qoi",
+    "62H6.qoi",
+    "62H7.qoi",
+    "62H8.qoi",
+    "62H9.qoi",
+]
+frame_time = 300
+
+[clearsky_day]
+frames = [
+    "clearsky_day1.qoi",
+    "clearsky_day2.qoi",
+    "clearsky_day3.qoi",
+    "clearsky_day4.qoi",
+]
+frame_time = 500
+
+[clearsky_night]
+frames = [
+    "clearsky_night1.qoi",
+    "clearsky_night2.qoi",
+    "clearsky_night3.qoi",
+    "clearsky_night4.qoi",
+]
+frame_time = 500
+
+[cloudy]
+frames = ["cloudy1.qoi", "cloudy2.qoi", "cloudy3.qoi", "cloudy4.qoi"]
+frame_time = 500
+
+[fair_night]
+frames = [
+    "fair_night1.qoi",
+    "fair_night2.qoi",
+    "fair_night3.qoi",
+    "fair_night4.qoi",
+]
+frame_time = 500
+
+[fair_day]
+frames = ["fair_day1.qoi", "fair_day2.qoi", "fair_day3.qoi", "fair_day4.qoi"]
+frame_time = 500
+
+[heavyrain]
+frames = [
+    "heavyrain1.qoi",
+    "heavyrain2.qoi",
+    "heavyrain3.qoi",
+    "heavyrain4.qoi",
+]
+frame_time = 500
+
+[heavyrainandthunder]
+frames = [
+    "heavyrainandthunder1.qoi",
+    "heavyrainandthunder2.qoi",
+    "heavyrainandthunder3.qoi",
+    "heavyrainandthunder4.qoi",
+]
+frame_time = 500
+
+[partlycloudy_day]
+frames = [
+    "partlycloudy_day1.qoi",
+    "partlycloudy_day2.qoi",
+    "partlycloudy_day3.qoi",
+    "partlycloudy_day4.qoi",
+]
+frame_time = 500
+
+[partlycloudy_night]
+frames = [
+    "partlycloudy_night1.qoi",
+    "partlycloudy_night2.qoi",
+    "partlycloudy_night3.qoi",
+    "partlycloudy_night4.qoi",
+]
+frame_time = 500
+
+[rain]
+frames = ["rain1.qoi", "rain2.qoi", "rain3.qoi", "rain4.qoi"]
+frame_time = 500
+
+[lightrain]
+frames = [
+    "lightrain1.qoi",
+    "lightrain2.qoi",
+    "lightrain3.qoi",
+    "lightrain4.qoi",
+]
+frame_time = 500
+
+[rainandthunder]
+frames = [
+    "rainandthunder1.qoi",
+    "rainandthunder2.qoi",
+    "rainandthunder3.qoi",
+    "rainandthunder4.qoi",
+]
+frame_time = 500

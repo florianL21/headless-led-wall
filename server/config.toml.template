@@ -1,0 +1,28 @@
+[display]
+# IP address of the headless display in the network
+ip = "10.0.0.101"
+
+# Which stations should be monitored
+# The given keys are passed as-is to the Wiener Linien API as part of the query URL
+[wl]
+# A list of stop IDs to monitor
+# You can find stop and DIVA IDs here: https://data.wien.gv.at/csv/wienerlinien-ogd-haltestellen.csv
+stopId = ["1490", "1490", "1680", "1756", "2610", "2611"]
+
+# Alternatively it is possible to monitor DIVAs as well
+# diva = [...]
+
+# Filter which lines should be displayed. The given number is the time to arrival in minutes above which a particular line should be displayed
+[line_filter]
+U1 = 5
+U2 = 5
+U4 = 5
+WLB = 2
+"62" = 2
+
+# Parameters to the weather API
+# The given keys are passed as-is to the MET API as part of the query URL
+[met]
+lat = "48.200"
+lon = "16.367"
+altitude = "200"

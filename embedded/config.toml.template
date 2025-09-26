@@ -1,0 +1,37 @@
+[wifi]
+ssid = "put your SSID here"
+password = "put your password here"
+
+[panel]
+# The higher this number the brighter the pixels will be.
+# But generally it should not go lower than 60 as it starts to cause flickering.
+target_fps = 300
+
+# Color depth of the output. Higher is always better.
+# Min is 1. Max is 24 but questionable if it is worth to go that high.
+# The higher this number the more RAM the frame buffers consume, and the
+# longer the transfer to the display is thus
+# lowering maximum achievable framerate
+color_depth = 2
+
+# How many pixels a single panel is wide
+panel_width = 64
+
+# How many pixels a single panel is high
+panel_height = 32
+
+# Number of panels chained together horizontally
+num_panels_width = 3
+
+# Number of panels chained together vertically
+num_panels_height = 3
+
+# Initial brightness of the panel when started up.
+# This can be adjusted via the rest API but it will always default
+# back to this number after a reboot of the display. 0 -100 in %
+initial_brightness = 15
+
+[rest]
+
+# Max number of connections that can be open at the same time
+max_concurrent_connections = 2

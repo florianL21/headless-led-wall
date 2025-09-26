@@ -1,0 +1,13 @@
+{
+  "rust-analyzer.cargo.allTargets": false,
+  // "rust-analyzer.cargo.target": "xtensa-esp32s3-none-elf",
+  "editor.formatOnSave": true,
+  "rust-analyzer.imports.group.enable": true,
+  "rust-analyzer.imports.preferNoStd": true,
+  "rust-analyzer.assist.preferSelf": true,
+  // "rust-analyzer.cargo.target": "xtensa-esp32s3-none-elf",
+  // "rust-analyzer.check.targets": [
+  //   "xtensa-esp32s3-none-elf",
+  //   "x86_64-unknown-linux-gnu"
+  // ],
+}

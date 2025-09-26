@@ -1,0 +1,20 @@
+[package]
+name = "interface"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+embedded-graphics = { version = "0.8.1", optional = true }
+embedded-picofont = { version = "0.2.1", optional = true }
+picoserve = { version = "0.16.0", optional = true }
+profont = { version = "0.7.0", optional = true }
+schemars = { version = "1.0.4", optional = true }
+serde = { version = "1.0.219", features = [
+    "derive",
+    "alloc",
+], default-features = false }
+thiserror = { version = "2.0.12", default-features = false }
+
+[features]
+default = ["embedded-graphics", "picoserve", "profont", "embedded-picofont"]
+server = ["dep:schemars", "serde/std"]

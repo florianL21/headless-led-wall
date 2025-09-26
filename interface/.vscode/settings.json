@@ -1,0 +1,5 @@
+{
+    "editor.formatOnSave": true,
+    "rust-analyzer.imports.group.enable": true,
+    "rust-analyzer.imports.preferNoStd": true,
+}

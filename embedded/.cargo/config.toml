@@ -1,0 +1,27 @@
+[target.xtensa-esp32s3-none-elf]
+# If your ESP fails to boot it is likely that it does not support the QIO flash mode, or that the flash size is configured to high
+runner = "espflash flash --monitor --chip esp32s3 --flash-size=8mb --partition-table=partition_table.csv"
+# If you are using a more exotic ESP32 module you can add these parameters to the command above to unlock its full potential.
+# If your module uses octal SPI flash you may need to add the flash-mode option to even make if boot
+# --flash-size=32mb --flash-mode qio  --flash-freq 80mhz
+
+[env]
+ESP_LOG = "info"
+
+# If your ESP32 does not have an octal PSRAM make sure you comment the following line. If your PSRAM fails to mount this is the first thing to try
+ESP_HAL_CONFIG_PSRAM_MODE = "octal"
+
+# If you have a single sprite which is bigger than 10240 bytes, you can change increase this value
+EKV_MAX_VALUE_SIZE = "10240"
+
+[build]
+rustflags = [
+    "-C",
+    "link-arg=-nostartfiles",
+    #"-Z", "stack-protector=all"
+]
+
+target = "xtensa-esp32s3-none-elf"
+
+[unstable]
+build-std = ["alloc", "core"]
