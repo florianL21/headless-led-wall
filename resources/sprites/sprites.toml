@@ -286,3 +286,24 @@ frames = [
     "rainandthunder4.qoi",
 ]
 frame_time = 500
+
+[lightsleet]
+frames = [
+    "lightsleet1.qoi",
+    "lightsleet2.qoi",
+    "lightsleet3.qoi",
+    "lightsleet4.qoi",
+]
+frame_time = 800
+
+[sleet]
+frames = ["sleet1.qoi", "sleet2.qoi", "sleet3.qoi", "sleet4.qoi"]
+frame_time = 500
+
+[fog]
+frames = ["fog1.qoi", "fog2.qoi", "fog3.qoi", "fog4.qoi"]
+frame_time = 800
+
+[snow]
+frames = ["snow1.qoi", "snow2.qoi", "snow3.qoi", "snow4.qoi"]
+frame_time = 800

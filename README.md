@@ -195,7 +195,7 @@ As for the weather icons, these are mostly incomplete. [A complete list of icons
    - [x] _day
    - [x] _night
    - [ ] _polartwilight
- - [ ] fog
+ - [x] fog
  - [x] heavyrain
  - [x] heavyrainandthunder
  - [ ] heavyrainshowers
@@ -236,7 +236,7 @@ As for the weather icons, these are mostly incomplete. [A complete list of icons
    - [ ] _day
    - [ ] _night
    - [ ] _polartwilight
- - [ ] lightsleet
+ - [x] lightsleet
  - [ ] lightsleetandthunder
  - [ ] lightsleetshowers
    - [ ] _day
@@ -270,7 +270,7 @@ As for the weather icons, these are mostly incomplete. [A complete list of icons
    - [ ] _day
    - [ ] _night
    - [ ] _polartwilight
- - [ ] sleet
+ - [x] sleet
  - [ ] sleetandthunder
  - [ ] sleetshowers
    - [ ] _day
@@ -280,7 +280,7 @@ As for the weather icons, these are mostly incomplete. [A complete list of icons
    - [ ] _day
    - [ ] _night
    - [ ] _polartwilight
- - [ ] snow
+ - [x] snow
  - [ ] snowandthunder
  - [ ] snowshowers
    - [ ] _day
