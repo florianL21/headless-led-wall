@@ -6,7 +6,6 @@ use crate::{
 };
 use alloc::{format, string::String, vec::Vec};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, signal::Signal};
-use embassy_time::Duration;
 use interface::{
     embedded::{CheckedScreenConfig, ScreenBuildError},
     Configuration, Resource,
@@ -29,6 +28,8 @@ pub type PanelIsOnSignal = Signal<CriticalSectionRawMutex, bool>;
 pub type DisplayConfigSignal = Signal<CriticalSectionRawMutex, Option<CheckedScreenConfig>>;
 
 pub static DISPLAY_CONFIG_SIGNAL: DisplayConfigSignal = Signal::new();
+static PICOSERVE_CONFIG: picoserve::Config =
+    picoserve::Config::const_default().keep_connection_alive();
 
 pub struct AppProps;
 
@@ -44,12 +45,12 @@ impl AppBuilder for AppProps {
                 }),
             )
             .route("/api/state", post(on_off_handler))
-            .route("/api/config", post(config_handler))
             .route("/api/settings", post(settings_handler))
             .route("/api/storage/format", post(format_handler))
             .route("/api/storage/upload", post(upload_handler))
             .route("/api/storage/exists", post(exists_handler))
             .route("/api/storage/delete", post(delete_handler))
+            .route("/api/config", post(config_handler))
     }
 }
 
@@ -235,22 +236,14 @@ pub async fn web_task(
     id: usize,
     stack: embassy_net::Stack<'static>,
     app: &'static AppRouter<AppProps>,
-    config: &'static picoserve::Config<Duration>,
 ) -> ! {
     let port = 80;
     let mut tcp_rx_buffer = [0; 1024];
     let mut tcp_tx_buffer = [0; 1024];
     let mut http_buffer = [0; 2048];
 
-    picoserve::listen_and_serve(
-        id,
-        app,
-        config,
-        stack,
-        port,
-        &mut tcp_rx_buffer,
-        &mut tcp_tx_buffer,
-        &mut http_buffer,
-    )
-    .await
+    picoserve::Server::new(app, &PICOSERVE_CONFIG, &mut http_buffer)
+        .listen_and_serve(id, stack, port, &mut tcp_rx_buffer, &mut tcp_tx_buffer)
+        .await
+        .into_never()
 }

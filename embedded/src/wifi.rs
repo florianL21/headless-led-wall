@@ -2,8 +2,8 @@ use crate::CONFIG;
 use embassy_net::Runner;
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, signal::Signal};
 use embassy_time::{Duration, Timer};
-use esp_wifi::wifi::{
-    ClientConfiguration, Configuration, WifiController, WifiDevice, WifiEvent, WifiState,
+use esp_radio::wifi::{
+    ClientConfig, ModeConfig, WifiController, WifiDevice, WifiEvent, WifiStaState,
 };
 use log::{error, info};
 
@@ -29,7 +29,7 @@ pub async fn connection(
     info!("start connection task");
     info!("Device capabilities: {:?}", controller.capabilities());
     loop {
-        if esp_wifi::wifi::wifi_state() == WifiState::StaConnected {
+        if esp_radio::wifi::sta_state() == WifiStaState::Connected {
             // wait until we're no longer connected
             controller.wait_for_event(WifiEvent::StaDisconnected).await;
             system_state.signal(SystemState::Disconnected);
@@ -37,12 +37,11 @@ pub async fn connection(
         }
 
         if !matches!(controller.is_started(), Ok(true)) {
-            let client_config = Configuration::Client(ClientConfiguration {
-                ssid: SSID.into(),
-                password: PASSWORD.into(),
-                ..Default::default()
-            });
-            controller.set_configuration(&client_config).unwrap();
+            let conf = ClientConfig::default()
+                .with_ssid(SSID.into())
+                .with_password(PASSWORD.into());
+            let client_config = ModeConfig::Client(conf);
+            controller.set_config(&client_config).unwrap();
             info!("Starting wifi");
             controller.start_async().await.unwrap();
             info!("Wifi started!");

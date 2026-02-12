@@ -3,7 +3,6 @@
 #![feature(impl_trait_in_assoc_type)]
 #![feature(impl_trait_in_bindings)]
 #![feature(associated_type_defaults)]
-#![feature(new_zeroed_alloc)]
 
 extern crate alloc;
 

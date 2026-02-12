@@ -10,13 +10,15 @@ use embassy_sync::signal::Signal;
 use embedded_storage::nor_flash::{NorFlash, ReadNorFlash};
 use esp_backtrace as _;
 use esp_bootloader_esp_idf::partitions::{self, FlashRegion};
-use esp_hal::system::{Cpu, CpuControl};
+use esp_hal::peripherals::FLASH;
 use esp_storage::FlashStorage;
 use log::info;
 use static_cell::make_static;
 
-pub type FlashType =
-    Database<PersistentStorage<FlashRegion<'static, FlashStorage>>, CriticalSectionRawMutex>;
+pub type FlashType = Database<
+    PersistentStorage<FlashRegion<'static, FlashStorage<'static>>>,
+    CriticalSectionRawMutex,
+>;
 
 pub enum FlashOperation {
     Store(String, Vec<u8>),
@@ -100,8 +102,8 @@ impl<T: NorFlash + ReadNorFlash> flash::Flash for PersistentStorage<T> {
     }
 }
 
-pub fn flash_init() -> FlashType {
-    let flash = make_static!(FlashStorage::new());
+pub fn flash_init(peripheral: FLASH<'static>) -> FlashType {
+    let flash = make_static!(FlashStorage::new(peripheral));
     let pt_mem = make_static!([0u8; partitions::PARTITION_TABLE_MAX_LEN]);
     let pt = partitions::read_partition_table(flash, pt_mem).unwrap();
     let fat = make_static!(pt
@@ -123,14 +125,10 @@ pub fn flash_init() -> FlashType {
 }
 
 #[task]
-pub async fn flash_task(flash: &'static FlashType, mut cpu_control: CpuControl<'static>) {
+pub async fn flash_task(flash: &'static FlashType) {
     if flash.mount().await.is_err() {
         info!("Flash mount failed. Formatting...");
-        unsafe {
-            cpu_control.park_core(Cpu::AppCpu);
-        }
         flash.format().await.unwrap();
-        cpu_control.unpark_core(Cpu::AppCpu);
     }
     info!("Flash task is starting");
     loop {
@@ -138,22 +136,15 @@ pub async fn flash_task(flash: &'static FlashType, mut cpu_control: CpuControl<'
         match operation {
             FlashOperation::Format => {
                 info!("Formatting flash...");
-                unsafe {
-                    cpu_control.park_core(Cpu::AppCpu);
-                }
                 FLASH_OPERATION_RESULT.signal(
                     flash
                         .format()
                         .await
                         .map_err(FlashOperationResult::FormatErr),
                 );
-                cpu_control.unpark_core(Cpu::AppCpu);
             }
             FlashOperation::Delete(ref key) => {
                 info!("Deleting {key}...");
-                unsafe {
-                    cpu_control.park_core(Cpu::AppCpu);
-                }
                 let mut wtx = flash.write_transaction().await;
                 if let Err(e) = wtx.delete(key.as_bytes()).await {
                     FLASH_OPERATION_RESULT.signal(Err(FlashOperationResult::WriteErr(e)));
@@ -161,13 +152,9 @@ pub async fn flash_task(flash: &'static FlashType, mut cpu_control: CpuControl<'
                     FLASH_OPERATION_RESULT
                         .signal(wtx.commit().await.map_err(FlashOperationResult::CommitErr));
                 }
-                cpu_control.unpark_core(Cpu::AppCpu);
             }
             FlashOperation::Store(ref key, ref value) => {
                 info!("Saving {key} to flash...");
-                unsafe {
-                    cpu_control.park_core(Cpu::AppCpu);
-                }
                 let mut wtx = flash.write_transaction().await;
                 if let Err(e) = wtx.write(key.as_bytes(), value.as_slice()).await {
                     FLASH_OPERATION_RESULT.signal(Err(FlashOperationResult::WriteErr(e)));
@@ -176,7 +163,6 @@ pub async fn flash_task(flash: &'static FlashType, mut cpu_control: CpuControl<'
                         .signal(wtx.commit().await.map_err(FlashOperationResult::CommitErr));
                     info!("Done");
                 }
-                cpu_control.unpark_core(Cpu::AppCpu);
             }
             FlashOperation::Exists(ref key) => {
                 info!("Checking if {key} exists...");

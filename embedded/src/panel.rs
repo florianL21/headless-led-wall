@@ -8,13 +8,13 @@ use esp_hal::gpio::{AnyPin, Level, Output, OutputConfig};
 use esp_hal::ledc::channel::ChannelIFace;
 use esp_hal::ledc::timer::TimerIFace;
 use esp_hal::ledc::{timer, LSGlobalClkSource, Ledc, LowSpeed};
-use esp_hal::peripherals::LCD_CAM;
+use esp_hal::peripherals::PARL_IO;
 use esp_hal::time::Rate;
 use esp_hub75::framebuffer::{compute_frame_count, compute_rows, latched::DmaFrameBuffer};
 use esp_hub75::{Hub75, Hub75Pins8};
 use hub75_framebuffer::tiling::{compute_tiled_cols, ChainTopRightDown, TiledFrameBuffer};
 use log::{error, info};
-use static_cell::make_static;
+use static_cell::StaticCell;
 
 // Constants to tune for best panel performance
 const BITS: u8 = CONFIG.panel.color_depth as u8;
@@ -50,7 +50,7 @@ pub type TiledFBType = TiledFrameBuffer<
 pub type FrameBufferExchange = Signal<CriticalSectionRawMutex, &'static mut TiledFBType>;
 
 pub struct Hub75Peripherals<'d> {
-    pub lcd_cam: LCD_CAM<'d>,
+    pub interface: PARL_IO<'d>,
     pub dma_channel: esp_hal::peripherals::DMA_CH0<'d>,
     pub pins: Hub75Pins8<'d>,
     pub pwm_pin: AnyPin<'d>,
@@ -83,8 +83,10 @@ fn init_fbs_heap() -> (&'static mut TiledFBType, &'static mut TiledFBType) {
 
 fn init_fbs_stack() -> (&'static mut TiledFBType, &'static mut TiledFBType) {
     // // Allocate the framebuffers in static memory. This assumes that they fit into ram.
-    let fb0 = make_static!(TiledFrameBuffer::new());
-    let fb1 = make_static!(TiledFrameBuffer::new());
+    static FB0: StaticCell<TiledFBType> = StaticCell::new();
+    static FB1: StaticCell<TiledFBType> = StaticCell::new();
+    let fb0 = FB0.init(TiledFrameBuffer::new());
+    let fb1 = FB1.init(TiledFrameBuffer::new());
     (fb0, fb1)
 }
 
@@ -120,7 +122,7 @@ pub async fn hub75_task(
     let (_, tx_descriptors) = esp_hal::dma_descriptors!(0, FBType::dma_buffer_size_bytes());
 
     let mut hub75 = Hub75::new_async(
-        peripherals.lcd_cam,
+        peripherals.interface,
         peripherals.pins,
         peripherals.dma_channel,
         tx_descriptors,
@@ -146,7 +148,7 @@ pub async fn hub75_task(
         .configure(esp_hal::ledc::channel::config::Config {
             timer: &lstimer0,
             duty_pct: brightness,
-            pin_config: esp_hal::ledc::channel::config::PinConfig::PushPull,
+            drive_mode: esp_hal::gpio::DriveMode::PushPull,
         })
         .expect("failed to configure LEDC channel");
 
