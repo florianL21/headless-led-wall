@@ -1,10 +1,11 @@
-use core::sync::atomic::Ordering;
+mod ota;
 
 use crate::{
     panel::{BRIGHTNESS, PANEL_ON},
     CONFIG,
 };
 use alloc::{format, string::String, vec::Vec};
+use core::sync::atomic::Ordering;
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, signal::Signal};
 use interface::{
     embedded::{CheckedScreenConfig, ScreenBuildError},
@@ -15,7 +16,7 @@ use picoserve::{
     extract::{FromRequest, Query},
     io::Read,
     response::{self, ErrorWithStatusCode},
-    routing::{get, post},
+    routing::{get, get_service, post},
     AppBuilder, AppRouter,
 };
 use postcard::from_bytes;
@@ -51,6 +52,13 @@ impl AppBuilder for AppProps {
             .route("/api/storage/exists", post(exists_handler))
             .route("/api/storage/delete", post(delete_handler))
             .route("/api/config", post(config_handler))
+            .route(
+                "/ota",
+                get_service(picoserve::response::File::html(include_str!(
+                    "rest/ota.html"
+                )))
+                .post_service(ota::OTARequest),
+            )
     }
 }
 

@@ -13,7 +13,7 @@ use esp_bootloader_esp_idf::partitions::{self, FlashRegion};
 use esp_hal::peripherals::FLASH;
 use esp_storage::FlashStorage;
 use log::info;
-use static_cell::make_static;
+use static_cell::StaticCell;
 
 pub type FlashType = Database<
     PersistentStorage<FlashRegion<'static, FlashStorage<'static>>>,
@@ -103,15 +103,26 @@ impl<T: NorFlash + ReadNorFlash> flash::Flash for PersistentStorage<T> {
 }
 
 pub fn flash_init(peripheral: FLASH<'static>) -> FlashType {
-    let flash = make_static!(FlashStorage::new(peripheral));
-    let pt_mem = make_static!([0u8; partitions::PARTITION_TABLE_MAX_LEN]);
+    static FLASH: StaticCell<FlashStorage> = StaticCell::new();
+    let flash = FlashStorage::new(peripheral);
+    #[cfg(feature = "esp32s3")]
+    let flash = flash.multicore_auto_park();
+
+    let flash = FLASH.init(flash);
+
+    static PT: StaticCell<[u8; partitions::PARTITION_TABLE_MAX_LEN]> = StaticCell::new();
+    let pt_mem = PT.init([0u8; partitions::PARTITION_TABLE_MAX_LEN]);
     let pt = partitions::read_partition_table(flash, pt_mem).unwrap();
-    let fat = make_static!(pt
-        .find_partition(partitions::PartitionType::Data(
+
+    static PART: StaticCell<partitions::PartitionEntry> = StaticCell::new();
+    let fat = PART.init(
+        pt.find_partition(partitions::PartitionType::Data(
             partitions::DataPartitionSubType::LittleFs,
         ))
         .expect("Failed to search for partitions")
-        .expect("Could not find a data:littlefs partition"));
+        .expect("Could not find a data:littlefs partition"),
+    );
+
     let offset = fat.offset();
     info!("Storing data into partition with offset: {offset}");
     let fat_partition = fat.as_embedded_storage(flash);

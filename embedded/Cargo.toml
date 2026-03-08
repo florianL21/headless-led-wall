@@ -22,11 +22,7 @@ embassy-net = { version = "0.8.0", features = [
 embedded-io = "0.7.1"
 embedded-io-async = "0.7.0"
 esp-alloc = "0.9.0"
-esp-backtrace = { version = "0.18.1", features = [
-  "panic-handler",
-  "println",
-  "semihosting",
-] }
+esp-backtrace = { version = "0.18.1", features = ["panic-handler", "println"] }
 esp-println = { version = "0.16.1", features = ["log-04"] }
 # for more networking protocol support see https://crates.io/crates/edge-net
 critical-section = "1.2.0"
@@ -58,7 +54,7 @@ smoltcp = { version = "0.12.0", default-features = false, features = [
   "socket-tcp",
   "socket-udp",
 ] }
-static_cell = { version = "2.1.1", features = ["nightly"] }
+static_cell = { version = "2.1.1" }
 embedded-graphics = "0.8.1"
 esp-hub75 = { version = "0.8.0", features = ["iram"] }
 hub75-framebuffer = { version = "0.6.0" }
@@ -79,9 +75,10 @@ embassy-embedded-hal = "0.5.0"
 ekv = { git = "https://github.com/embassy-rs/ekv.git", rev = "b68fd9a" }
 embedded-storage = "0.3.1"
 static-toml = "1.3.0"
+cfg-if = "1.0.4"
 
 [features]
-default = ["esp32c6"]
+default = []
 esp32c6 = [
   "esp-storage/esp32c6",
   "esp-hub75/esp32c6",
@@ -102,7 +99,9 @@ esp32s3 = [
   "esp-hal/esp32s3",
   "esp-hal/psram",
   "esp-bootloader-esp-idf/esp32s3",
+  "esp-backtrace/semihosting",
 ]
+psram = []
 
 [profile.dev]
 # Rust debug is too slow.

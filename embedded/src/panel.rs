@@ -8,13 +8,19 @@ use esp_hal::gpio::{AnyPin, Level, Output, OutputConfig};
 use esp_hal::ledc::channel::ChannelIFace;
 use esp_hal::ledc::timer::TimerIFace;
 use esp_hal::ledc::{timer, LSGlobalClkSource, Ledc, LowSpeed};
-use esp_hal::peripherals::PARL_IO;
+
 use esp_hal::time::Rate;
 use esp_hub75::framebuffer::{compute_frame_count, compute_rows, latched::DmaFrameBuffer};
 use esp_hub75::{Hub75, Hub75Pins8};
 use hub75_framebuffer::tiling::{compute_tiled_cols, ChainTopRightDown, TiledFrameBuffer};
 use log::{error, info};
 use static_cell::StaticCell;
+
+#[cfg(feature = "esp32s3")]
+use esp_hal::peripherals::LCD_CAM as FB_PER;
+
+#[cfg(feature = "esp32c6")]
+use esp_hal::peripherals::PARL_IO as FB_PER;
 
 // Constants to tune for best panel performance
 const BITS: u8 = CONFIG.panel.color_depth as u8;
@@ -50,7 +56,7 @@ pub type TiledFBType = TiledFrameBuffer<
 pub type FrameBufferExchange = Signal<CriticalSectionRawMutex, &'static mut TiledFBType>;
 
 pub struct Hub75Peripherals<'d> {
-    pub interface: PARL_IO<'d>,
+    pub interface: FB_PER<'d>,
     pub dma_channel: esp_hal::peripherals::DMA_CH0<'d>,
     pub pins: Hub75Pins8<'d>,
     pub pwm_pin: AnyPin<'d>,
@@ -194,7 +200,6 @@ pub async fn hub75_task(
                 tx.signal(fb);
                 fb = new_fb;
             }
-
             let mut xfer = hub75
                 .render(fb)
                 .map_err(|(e, _hub75)| e)

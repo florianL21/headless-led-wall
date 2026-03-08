@@ -1,8 +1,18 @@
 {
   "rust-analyzer.cargo.allTargets": false,
+  // "rust-analyzer.cargo.target": "riscv32imac-unknown-none-elf",
+  // "rust-analyzer.server.extraEnv": {
+  //   "RUSTUP_TOOLCHAIN": "nightly"
+  // },
+  // "rust-analyzer.check.extraEnv": {
+  //   "RUSTUP_TOOLCHAIN": "nightly"
+  // },
+  // "rust-analyzer.cargo.extraEnv": {
+  //   "RUSTUP_TOOLCHAIN": "nightly"
+  // },
   "rust-analyzer.cargo.target": "xtensa-esp32s3-none-elf",
   "rust-analyzer.server.extraEnv": {
-    "RUSTUP_TOOLCHAIN": "stable"
+    "RUSTUP_TOOLCHAIN": "esp"
   },
   "rust-analyzer.check.extraEnv": {
     "RUSTUP_TOOLCHAIN": "esp"
