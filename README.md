@@ -39,7 +39,7 @@ This repo provides a ready made implementation of the server side as well, which
 4. In a terminal run `cargo install --locked espup espflash`
 5. Run `espup install`
 6. Make a copy of [config.toml.template](embedded/config.toml.template) in the same directory and name it `config.toml`. Open the file and follow the comment to make the necessary changes. At the very minimum you have to fill out the WIFI details.
-7. Plug your ESP into your PC, navigate to the `embedded` directory and run `cargo run --release`
+7. Plug your ESP into your PC, navigate to the `embedded` directory and run `cargo rs3`
 8. Make a copy of [config.toml.template](server/config.toml.template) in the same directory and name it `config.toml`. Open it and follow the comments to make adjustments. At the very least you will have to configure the IP address of the display. The ESP will have printed its IP address on the console as part of the previous step.
 9. Navigate to the `server` directory and run `cargo run -- config.toml server`
 10. You should now have a dashboard like shown in the example picture
@@ -87,7 +87,7 @@ It will also open a REST API with which one can interact. The current endpoints 
 To compile and flash the firmware to the ESP simply run:
 
 ```bash
-cargo run --release
+cargo rs3
 ```
 
 ### Troubleshooting

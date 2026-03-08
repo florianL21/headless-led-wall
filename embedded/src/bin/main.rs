@@ -7,22 +7,20 @@
 )]
 #![feature(type_alias_impl_trait)]
 #![feature(impl_trait_in_assoc_type)]
-#![feature(new_zeroed_alloc)]
 
-use core::ptr::addr_of_mut;
 use core::sync::atomic::Ordering;
 use embassy_executor::{task, Spawner};
 use embassy_net::StackResources;
 use embassy_time::{Duration, Timer};
 use esp_backtrace as _;
 use esp_hal::gpio::Pin;
-use esp_hal::psram::{FlashFreq, PsramConfig, SpiRamFreq, SpiTimingConfigCoreClock};
-use esp_hal::system::{CpuControl, Stack};
-use esp_hal::timer::AnyTimer;
+use esp_hal::interrupt::software::SoftwareInterruptControl;
+use esp_hal::interrupt::Priority;
+use esp_hal::rng::Rng;
 use esp_hal::{clock::CpuClock, timer::timg::TimerGroup};
-use esp_hal_embassy::Executor;
 use esp_hub75::Hub75Pins8;
-use headless_display::flash::{flash_init, flash_task};
+use esp_rtos::embassy::InterruptExecutor;
+use headless_display::flash::{flash_init, flash_task, FlashType};
 use headless_display::panel::init_led_panel;
 use headless_display::panel::REFRESH_RATE;
 use headless_display::rest::{web_task, AppProps, WEB_TASK_POOL_SIZE};
@@ -33,8 +31,11 @@ use headless_display::{
     wifi::{connection, net_task, CurrentStateSignal, SystemState},
 };
 use log::info;
-use picoserve::AppBuilder;
-use static_cell::make_static;
+use picoserve::{AppBuilder, AppRouter};
+use static_cell::StaticCell;
+
+#[cfg(feature = "esp32s3")]
+use esp_hal::system::Stack;
 
 extern crate alloc;
 
@@ -50,36 +51,38 @@ async fn log_fps() {
     }
 }
 
-#[esp_hal_embassy::main]
+#[esp_rtos::main]
 async fn main(spawner: Spawner) {
     esp_println::logger::init_logger_from_env();
 
-    let psram_config = PsramConfig {
-        flash_frequency: FlashFreq::FlashFreq120m,
-        ram_frequency: SpiRamFreq::Freq120m,
-        core_clock: SpiTimingConfigCoreClock::SpiTimingConfigCoreClock240m,
-        ..Default::default()
-    };
-    let config = esp_hal::Config::default()
-        .with_cpu_clock(CpuClock::max())
-        .with_psram(psram_config);
+    let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
+
+    esp_alloc::heap_allocator!(size: 82 * 1024);
+
     let peripherals = esp_hal::init(config);
-
-    esp_alloc::psram_allocator!(peripherals.PSRAM, esp_hal::psram);
-
     let timg0 = TimerGroup::new(peripherals.TIMG0);
-    let timer0: AnyTimer = timg0.timer0.into();
-    let timer1: AnyTimer = timg0.timer1.into();
-    esp_hal_embassy::init([timer0, timer1]);
-    let mut cpu_control = CpuControl::new(peripherals.CPU_CTRL);
+    let sw_int = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
+
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "esp32c6")] {
+            esp_rtos::start(timg0.timer0, sw_int.software_interrupt0);
+        } else if #[cfg(feature = "esp32s3")] {
+
+            esp_rtos::start(timg0.timer0);
+        }
+    }
+
+    #[cfg(feature = "psram")]
+    esp_alloc::psram_allocator!(peripherals.PSRAM, esp_hal::psram);
 
     info!("Embassy initialized!");
 
     static CURRENT_STATE: CurrentStateSignal = CurrentStateSignal::new();
 
     // Initialize flash storage
-    let flash = flash_init();
-    let flash = make_static!(flash);
+    let flash = flash_init(peripherals.FLASH);
+    static FLASH: StaticCell<FlashType> = StaticCell::new();
+    let flash = FLASH.init(flash);
     let flash = &*flash;
 
     // LED Panel init
@@ -97,7 +100,10 @@ async fn main(spawner: Spawner) {
 
     let hub75_per: Hub75Peripherals<'_> = Hub75Peripherals {
         dma_channel: peripherals.DMA_CH0,
-        lcd_cam: peripherals.LCD_CAM,
+        #[cfg(feature = "esp32c6")]
+        interface: peripherals.PARL_IO,
+        #[cfg(feature = "esp32s3")]
+        interface: peripherals.LCD_CAM,
         pins,
         pwm_pin: peripherals.GPIO45.degrade(),
         ledc: peripherals.LEDC,
@@ -108,29 +114,46 @@ async fn main(spawner: Spawner) {
     static TX: FrameBufferExchange = FrameBufferExchange::new();
     static RX: FrameBufferExchange = FrameBufferExchange::new();
 
-    static mut APP_CORE_STACK: Stack<4096> = Stack::new();
-    let _guard = cpu_control
-        .start_app_core(unsafe { &mut *addr_of_mut!(APP_CORE_STACK) }, move || {
-            info!("Core 1 spawning all tasks");
+    static EXECUTOR: StaticCell<InterruptExecutor<2>> = StaticCell::new();
+    let executor = InterruptExecutor::new(sw_int.software_interrupt2);
+    let executor = EXECUTOR.init(executor);
 
-            let lp_executor = make_static!(Executor::new());
-            // display task runs as low priority task
-            lp_executor.run(|spawner| {
-                spawner
-                    .spawn(hub75_task(
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "esp32c6")] {
+            let high_prio_spawner = executor.start(Priority::max());
+            high_prio_spawner.must_spawn(hub75_task(
+                hub75_per,
+                &RX,
+                &TX,
+                fb1,
+                panel_freq,
+                TARGET_PANEL_FRAME_RATE,
+            ));
+        } else if #[cfg(feature = "esp32s3")] {
+            static APP_CORE_STACK: StaticCell<Stack<8192>> = StaticCell::new();
+            let app_core_stack = APP_CORE_STACK.init(Stack::new());
+            esp_rtos::start_second_core(
+                peripherals.CPU_CTRL,
+                sw_int.software_interrupt0,
+                sw_int.software_interrupt1,
+                app_core_stack,
+                move || {
+                    let spawner = executor.start(Priority::max());
+                    spawner.must_spawn(hub75_task(
                         hub75_per,
                         &RX,
                         &TX,
                         fb1,
                         panel_freq,
                         TARGET_PANEL_FRAME_RATE,
-                    ))
-                    .ok();
-            });
-        })
-        .unwrap();
+                    ));
+                    loop {}
+                },
+            );
+        }
+    }
 
-    spawner.must_spawn(flash_task(flash, cpu_control));
+    spawner.must_spawn(flash_task(flash));
     spawner.must_spawn(display_task(&TX, &RX, fb0, &CURRENT_STATE, flash));
 
     let stats = esp_alloc::HEAP.stats();
@@ -138,34 +161,34 @@ async fn main(spawner: Spawner) {
 
     // spawner.must_spawn(log_fps());
 
-    // // WIFI init
-    // // Allocate the WIFI stack to the internal heap
-    esp_alloc::heap_allocator!(size: 72 * 1024);
-    let mut rng = esp_hal::rng::Rng::new(peripherals.RNG);
-    let timer1 = TimerGroup::new(peripherals.TIMG1);
-    let esp_wifi_ctrl = &*make_static!(
-        esp_wifi::init(timer1.timer0, rng).expect("Failed to initialize WIFI/BLE controller")
-    );
-    let (controller, interfaces) = esp_wifi::wifi::new(esp_wifi_ctrl, peripherals.WIFI)
-        .expect("Failed to initialize WIFI controller");
+    // WIFI init
+    // Allocate the WIFI stack to the internal heap
+
+    static RADIO_INIT: StaticCell<esp_radio::Controller> = StaticCell::new();
+    let radio_init =
+        RADIO_INIT.init(esp_radio::init().expect("Failed to initialize Wi-Fi/BLE controller"));
+    let (controller, interfaces) =
+        esp_radio::wifi::new(radio_init, peripherals.WIFI, Default::default())
+            .expect("Failed to initialize Wi-Fi controller");
 
     let wifi_interface = interfaces.sta;
+
     let config = embassy_net::Config::dhcpv4(Default::default());
+
+    let rng = Rng::new();
     let seed = (rng.random() as u64) << 32 | rng.random() as u64;
 
     // Init network stack
+    static STACK_RES: StaticCell<StackResources<3>> = StaticCell::new();
     let (stack, runner) = embassy_net::new(
         wifi_interface,
         config,
-        make_static!(StackResources::<3>::new()),
+        STACK_RES.init(StackResources::new()),
         seed,
     );
 
     spawner.must_spawn(connection(controller, &CURRENT_STATE));
     spawner.must_spawn(net_task(runner));
-
-    let stats = esp_alloc::HEAP.stats();
-    info!("Total used heap: {stats}");
 
     // TODO: handle system start properly. The wifi logo flashes briefly because the system is set to ready from 2 locations
     CURRENT_STATE.signal(SystemState::WIFIConnecting);
@@ -188,20 +211,15 @@ async fn main(spawner: Spawner) {
     CURRENT_STATE.signal(SystemState::Ready);
 
     // Webserver
-
-    let app = make_static!(AppProps.build_app());
-
-    let config = make_static!(picoserve::Config::new(picoserve::Timeouts {
-        start_read_request: Some(Duration::from_secs(5)),
-        persistent_start_read_request: Some(Duration::from_secs(1)),
-        read_request: Some(Duration::from_secs(1)),
-        write: Some(Duration::from_secs(1)),
-    })
-    .keep_connection_alive());
+    static APP: StaticCell<AppRouter<AppProps>> = StaticCell::new();
+    let app = APP.init(AppProps.build_app());
 
     for id in 0..WEB_TASK_POOL_SIZE {
-        spawner.must_spawn(web_task(id, stack, app, config));
+        spawner.must_spawn(web_task(id, stack, app));
     }
+
+    let stats = esp_alloc::HEAP.stats();
+    info!("Total used heap: {stats}");
 
     loop {
         Timer::after(Duration::from_secs(20)).await;

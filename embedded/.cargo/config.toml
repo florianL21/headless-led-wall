@@ -1,9 +1,19 @@
+[alias]
+bc6 = "build --release --target riscv32imac-unknown-none-elf --features esp32c6"
+bs3 = "build --release --target xtensa-esp32s3-none-elf --features esp32s3,psram"
+rc6 = "run --release --target riscv32imac-unknown-none-elf --features esp32c6"
+rs3 = "run --release --target xtensa-esp32s3-none-elf --features esp32s3,psram"
+
 [target.xtensa-esp32s3-none-elf]
 # If your ESP fails to boot it is likely that it does not support the QIO flash mode, or that the flash size is configured to high
-runner = "espflash flash --monitor --chip esp32s3 --flash-size=8mb --partition-table=partition_table.csv"
+runner = "espflash flash --monitor --chip esp32s3 --flash-size=8mb --partition-table=partition_table_s3.csv"
 # If you are using a more exotic ESP32 module you can add these parameters to the command above to unlock its full potential.
 # If your module uses octal SPI flash you may need to add the flash-mode option to even make if boot
 # --flash-size=32mb --flash-mode qio  --flash-freq 80mhz
+
+[target.riscv32imac-unknown-none-elf]
+runner = "espflash flash --monitor --chip esp32c6 --flash-size=8mb --partition-table=partition_table_c6.csv"
+
 
 [env]
 ESP_LOG = "info"
@@ -21,7 +31,12 @@ rustflags = [
     #"-Z", "stack-protector=all"
 ]
 
-target = "xtensa-esp32s3-none-elf"
+# rustflags = [
+#     # Required to obtain backtraces (e.g. when using the "esp-backtrace" crate.)
+#     # NOTE: May negatively impact performance of produced code
+#     "-C",
+#     "force-frame-pointers",
+# ]
 
 [unstable]
 build-std = ["alloc", "core"]

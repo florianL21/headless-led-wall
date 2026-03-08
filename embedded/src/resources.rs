@@ -29,7 +29,7 @@ pub fn bake(res: Resource) -> BakedResource {
 }
 
 impl BakedResource {
-    pub fn get_image(&mut self, time: Instant) -> Result<Qoi, SpriteError> {
+    pub fn get_image(&mut self, time: Instant) -> Result<Qoi<'_>, SpriteError> {
         let current_frame = if self.needs_update(time) {
             self.last_iteration = time;
             self.iter.next();
