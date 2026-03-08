@@ -30,4 +30,4 @@ jobs:
     - name: Install the toolchain
       run: cargo install --locked espup && espup install
     - name: Build the embedded firmware
-      run: . ~/export-esp.sh && cd embedded && cp config.toml.template config.toml && cargo build --release --verbose
+      run: . ~/export-esp.sh && cd embedded && cp config.toml.template config.toml && cargo bs3 --verbose
