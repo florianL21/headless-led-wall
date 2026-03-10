@@ -10,6 +10,7 @@
   // "rust-analyzer.cargo.extraEnv": {
   //   "RUSTUP_TOOLCHAIN": "nightly"
   // },
+  // "rust-analyzer.cargo.features": ["esp32c6"],
   "rust-analyzer.cargo.target": "xtensa-esp32s3-none-elf",
   "rust-analyzer.server.extraEnv": {
     "RUSTUP_TOOLCHAIN": "esp"
@@ -20,5 +21,8 @@
   "rust-analyzer.cargo.extraEnv": {
     "RUSTUP_TOOLCHAIN": "esp"
   },
+  "rust-analyzer.cargo.features": [
+    "esp32s3"
+  ],
   "editor.formatOnSave": true
 }

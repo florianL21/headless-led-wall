@@ -15,11 +15,10 @@ use embassy_time::{Duration, Timer};
 use esp_backtrace as _;
 use esp_hal::gpio::Pin;
 use esp_hal::interrupt::software::SoftwareInterruptControl;
-use esp_hal::interrupt::Priority;
 use esp_hal::rng::Rng;
 use esp_hal::{clock::CpuClock, timer::timg::TimerGroup};
 use esp_hub75::Hub75Pins8;
-use esp_rtos::embassy::InterruptExecutor;
+use esp_rtos::embassy::Executor;
 use headless_display::flash::{flash_init, flash_task, FlashType};
 use headless_display::panel::init_led_panel;
 use headless_display::panel::REFRESH_RATE;
@@ -67,7 +66,6 @@ async fn main(spawner: Spawner) {
         if #[cfg(feature = "esp32c6")] {
             esp_rtos::start(timg0.timer0, sw_int.software_interrupt0);
         } else if #[cfg(feature = "esp32s3")] {
-
             esp_rtos::start(timg0.timer0);
         }
     }
@@ -86,17 +84,37 @@ async fn main(spawner: Spawner) {
     let flash = &*flash;
 
     // LED Panel init
-    let pins = Hub75Pins8 {
-        red1: peripherals.GPIO42.degrade(),
-        grn1: peripherals.GPIO41.degrade(),
-        blu1: peripherals.GPIO40.degrade(),
-        red2: peripherals.GPIO38.degrade(),
-        grn2: peripherals.GPIO39.degrade(),
-        blu2: peripherals.GPIO12.degrade(),
-        clock: peripherals.GPIO2.degrade(),
-        blank: peripherals.GPIO14.degrade(),
-        latch: peripherals.GPIO47.degrade(),
-    };
+    #[cfg(feature = "esp32s3")]
+    let (pins, pwm_pin) = (
+        Hub75Pins8 {
+            red1: peripherals.GPIO1.degrade(),   //D0
+            grn1: peripherals.GPIO2.degrade(),   //D1
+            blu1: peripherals.GPIO3.degrade(),   //D2
+            red2: peripherals.GPIO4.degrade(),   //D3
+            grn2: peripherals.GPIO5.degrade(),   //D4
+            blu2: peripherals.GPIO6.degrade(),   //D5
+            clock: peripherals.GPIO44.degrade(), //D7
+            blank: peripherals.GPIO8.degrade(),  //D9
+            latch: peripherals.GPIO43.degrade(), //D6
+        },
+        peripherals.GPIO7.degrade(), //D8
+    );
+
+    #[cfg(feature = "esp32c6")]
+    let (pins, pwm_pin) = (
+        Hub75Pins8 {
+            red1: peripherals.GPIO0.degrade(),   //D0
+            grn1: peripherals.GPIO1.degrade(),   //D1
+            blu1: peripherals.GPIO2.degrade(),   //D2
+            red2: peripherals.GPIO21.degrade(),  //D3
+            grn2: peripherals.GPIO22.degrade(),  //D4
+            blu2: peripherals.GPIO23.degrade(),  //D5
+            clock: peripherals.GPIO17.degrade(), //D7
+            blank: peripherals.GPIO20.degrade(), //D9
+            latch: peripherals.GPIO16.degrade(), //D6
+        },
+        peripherals.GPIO19.degrade(), //D8
+    );
 
     let hub75_per: Hub75Peripherals<'_> = Hub75Peripherals {
         dma_channel: peripherals.DMA_CH0,
@@ -105,7 +123,7 @@ async fn main(spawner: Spawner) {
         #[cfg(feature = "esp32s3")]
         interface: peripherals.LCD_CAM,
         pins,
-        pwm_pin: peripherals.GPIO45.degrade(),
+        pwm_pin,
         ledc: peripherals.LEDC,
     };
     let (fb0, fb1, panel_freq) = init_led_panel::<false>();
@@ -113,10 +131,6 @@ async fn main(spawner: Spawner) {
     info!("init framebuffer exchange");
     static TX: FrameBufferExchange = FrameBufferExchange::new();
     static RX: FrameBufferExchange = FrameBufferExchange::new();
-
-    static EXECUTOR: StaticCell<InterruptExecutor<2>> = StaticCell::new();
-    let executor = InterruptExecutor::new(sw_int.software_interrupt2);
-    let executor = EXECUTOR.init(executor);
 
     cfg_if::cfg_if! {
         if #[cfg(feature = "esp32c6")] {
@@ -138,8 +152,10 @@ async fn main(spawner: Spawner) {
                 sw_int.software_interrupt1,
                 app_core_stack,
                 move || {
-                    let spawner = executor.start(Priority::max());
-                    spawner.must_spawn(hub75_task(
+                    static EXECUTOR: StaticCell<Executor> = StaticCell::new();
+                    let executor = EXECUTOR.init(Executor::new());
+                    executor.run(|spawner| {
+                        spawner.must_spawn(hub75_task(
                         hub75_per,
                         &RX,
                         &TX,
@@ -147,7 +163,7 @@ async fn main(spawner: Spawner) {
                         panel_freq,
                         TARGET_PANEL_FRAME_RATE,
                     ));
-                    loop {}
+                    });
                 },
             );
         }

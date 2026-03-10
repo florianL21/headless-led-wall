@@ -17,12 +17,12 @@ runner = "espflash flash --monitor --chip esp32c6 --flash-size=8mb --partition-t
 
 [env]
 ESP_LOG = "info"
+# If you have a single sprite which is bigger than 10240 bytes, you can change increase this value
+EKV_MAX_VALUE_SIZE = "10240"
 
 # If your ESP32 does not have an octal PSRAM make sure you comment the following line. If your PSRAM fails to mount this is the first thing to try
 ESP_HAL_CONFIG_PSRAM_MODE = "octal"
 
-# If you have a single sprite which is bigger than 10240 bytes, you can change increase this value
-EKV_MAX_VALUE_SIZE = "10240"
 
 [build]
 rustflags = [
@@ -31,6 +31,7 @@ rustflags = [
     #"-Z", "stack-protector=all"
 ]
 
+# [build]
 # rustflags = [
 #     # Required to obtain backtraces (e.g. when using the "esp-backtrace" crate.)
 #     # NOTE: May negatively impact performance of produced code
