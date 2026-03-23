@@ -739,9 +739,9 @@ dependencies = [
 
 [[package]]
 name = "esp-hub75"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5b6a2dc6f11dfa3408c73fae9e940fbb0958968cd1bb01bc13d0495803f6d3f"
+checksum = "6a192b5d7e02c7df62997b95dd8e6e2c44e3395ce4356355a1fe98b0eebf78ed"
 dependencies = [
  "bitfield",
  "cfg-if",

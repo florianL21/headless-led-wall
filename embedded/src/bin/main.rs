@@ -18,7 +18,6 @@ use esp_hal::interrupt::software::SoftwareInterruptControl;
 use esp_hal::rng::Rng;
 use esp_hal::{clock::CpuClock, timer::timg::TimerGroup};
 use esp_hub75::Hub75Pins8;
-use esp_rtos::embassy::Executor;
 use headless_display::flash::{flash_init, flash_task, FlashType};
 use headless_display::panel::init_led_panel;
 use headless_display::panel::REFRESH_RATE;
@@ -134,6 +133,12 @@ async fn main(spawner: Spawner) {
 
     cfg_if::cfg_if! {
         if #[cfg(feature = "esp32c6")] {
+            use esp_rtos::embassy::InterruptExecutor;
+            use esp_hal::interrupt::Priority;
+
+            static EXECUTOR: StaticCell<InterruptExecutor<2>> = StaticCell::new();
+            let executor = InterruptExecutor::new(sw_int.software_interrupt2);
+            let executor = EXECUTOR.init(executor);
             let high_prio_spawner = executor.start(Priority::max());
             high_prio_spawner.must_spawn(hub75_task(
                 hub75_per,
@@ -144,6 +149,8 @@ async fn main(spawner: Spawner) {
                 TARGET_PANEL_FRAME_RATE,
             ));
         } else if #[cfg(feature = "esp32s3")] {
+            use esp_rtos::embassy::Executor;
+
             static APP_CORE_STACK: StaticCell<Stack<8192>> = StaticCell::new();
             let app_core_stack = APP_CORE_STACK.init(Stack::new());
             esp_rtos::start_second_core(
