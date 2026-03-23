@@ -1,0 +1,165 @@
+{
+    "$schema": "schema.json",
+    "screen": {
+        "canvas_size": {
+            "height": 64,
+            "width": 64
+        },
+        "screen_size": {
+            "height": 32,
+            "width": 64
+        },
+        "elements": [
+            {
+                "Text": {
+                    "style": "default",
+                    "position": {
+                        "x": 0,
+                        "y": 6
+                    },
+                    "text": "Line 1"
+                }
+            },
+            {
+                "Text": {
+                    "style": "default",
+                    "position": {
+                        "x": 0,
+                        "y": 14
+                    },
+                    "text": "Line 2"
+                }
+            },
+            {
+                "Text": {
+                    "style": "default",
+                    "position": {
+                        "x": 0,
+                        "y": 22
+                    },
+                    "text": "Line 3"
+                }
+            },
+            {
+                "Text": {
+                    "style": "default",
+                    "position": {
+                        "x": 0,
+                        "y": 30
+                    },
+                    "text": "Line 4"
+                }
+            },
+            {
+                "Text": {
+                    "style": "default",
+                    "position": {
+                        "x": 0,
+                        "y": 38
+                    },
+                    "text": "Line 5"
+                }
+            },
+            {
+                "Text": {
+                    "style": "default",
+                    "position": {
+                        "x": 0,
+                        "y": 46
+                    },
+                    "text": "Line 6"
+                }
+            },
+            {
+                "Line": {
+                    "color": "FF0000",
+                    "start": {
+                        "x": 45,
+                        "y": 1
+                    },
+                    "end": {
+                        "x": 62,
+                        "y": 62
+                    },
+                    "stroke": 2
+                }
+            },
+            {
+                "Sprite": {
+                    "name": "62R",
+                    "position": {
+                        "x": 45,
+                        "y": 15
+                    }
+                }
+            },
+            {
+                "Polyline": {
+                    "color": "00FF00",
+                    "stroke": 1,
+                    "points": [
+                        {
+                            "x": 0,
+                            "y": 50
+                        },
+                        {
+                            "x": 20,
+                            "y": 60
+                        },
+                        {
+                            "x": 30,
+                            "y": 50
+                        },
+                        {
+                            "x": 40,
+                            "y": 55
+                        },
+                        {
+                            "x": 60,
+                            "y": 40
+                        }
+                    ]
+                }
+            },
+            {
+                "Rectangle": {
+                    "fill_color": "00FFFF",
+                    "stroke": 2,
+                    "rounded_corners": {
+                        "Uniform": {
+                            "height": 3,
+                            "width": 3
+                        }
+                    },
+                    "top_left": {
+                        "x": 30,
+                        "y": 5
+                    },
+                    "size": {
+                        "height": 10,
+                        "width": 20
+                    },
+                    "stroke_color": "0000FF"
+                }
+            }
+        ],
+        "scroll_animation": {
+            "TopToBottom": {
+                "animation_tick": {
+                    "nanos": 200000000,
+                    "secs": 0
+                },
+                "starting_delay": {
+                    "nanos": 0,
+                    "secs": 1
+                }
+            }
+        }
+    },
+    "text_styles": {
+        "default": {
+            "font": "Font6X10",
+            "text_color": "FFFFFF"
+        }
+    }
+}

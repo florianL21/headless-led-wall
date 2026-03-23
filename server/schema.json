@@ -3,12 +3,9 @@
   "title": "Configuration",
   "type": "object",
   "properties": {
-    "screens": {
-      "description": "Array of screens to display. For now only the first screen is acutally read.",
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/Screen"
-      }
+    "screen": {
+      "description": "Array of screens to display. For now only the first screen is actually read.",
+      "$ref": "#/$defs/Screen"
     },
     "text_styles": {
       "description": "Map of text styles",
@@ -19,7 +16,7 @@
     }
   },
   "required": [
-    "screens",
+    "screen",
     "text_styles"
   ],
   "$defs": {
@@ -29,6 +26,25 @@
         "Left",
         "Center",
         "Right"
+      ]
+    },
+    "Duration": {
+      "type": "object",
+      "properties": {
+        "nanos": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "secs": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "secs",
+        "nanos"
       ]
     },
     "Element": {
@@ -389,17 +405,69 @@
     "Screen": {
       "type": "object",
       "properties": {
+        "canvas_size": {
+          "description": "size of the virtual canvas that is drawn to the display",
+          "$ref": "#/$defs/Size"
+        },
         "elements": {
           "description": "Array of elements to display on the screen",
           "type": "array",
           "items": {
             "$ref": "#/$defs/Element"
           }
+        },
+        "screen_size": {
+          "description": "size of the physical screen in pixels (width, height).",
+          "$ref": "#/$defs/Size"
+        },
+        "scroll_animation": {
+          "description": "Scrolling of the screen",
+          "$ref": "#/$defs/ScrollAnimation"
         }
       },
       "additionalProperties": false,
       "required": [
-        "elements"
+        "elements",
+        "scroll_animation",
+        "screen_size",
+        "canvas_size"
+      ]
+    },
+    "ScrollAnimation": {
+      "oneOf": [
+        {
+          "description": "Not animated",
+          "type": "string",
+          "const": "Still"
+        },
+        {
+          "description": "Scroll the screen from the top to the bottom.\nOnce reaching the bottom it will reset to the top without scrolling",
+          "type": "object",
+          "properties": {
+            "TopToBottom": {
+              "type": "object",
+              "properties": {
+                "animation_tick": {
+                  "description": "Time between scrolling one pixel",
+                  "$ref": "#/$defs/Duration"
+                },
+                "starting_delay": {
+                  "description": "Delay before the screen will start scrolling down",
+                  "$ref": "#/$defs/Duration"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "starting_delay",
+                "animation_tick"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "TopToBottom"
+          ]
+        }
       ]
     },
     "Size": {

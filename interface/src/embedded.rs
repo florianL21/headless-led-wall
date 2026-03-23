@@ -1,5 +1,11 @@
+use core::iter::repeat;
+
 use super::TextStyle;
-use crate::{Alignment, Configuration, Element, FontName, GlobalStylesType, Point, Screen, Size};
+use crate::{
+    Alignment, Configuration, Element, FontName, GlobalStylesType, Point, Screen, ScrollAnimation,
+    Size,
+};
+use alloc::boxed::Box;
 use alloc::collections::btree_map::BTreeMap;
 use alloc::string::String;
 use embedded_graphics::mono_font::iso_8859_1::{
@@ -28,17 +34,12 @@ pub struct CheckedScreenConfig {
 
 impl CheckedScreenConfig {
     pub fn new(config: Configuration) -> Result<Self, ScreenBuildError> {
-        if config.screens.len() > 1 {
-            Err(ScreenBuildError::TooManyScreens)
-        } else if config.screens.is_empty() {
-            Err(ScreenBuildError::NoScreen)
-        } else if let Some(screen) = config.screens.into_iter().next() {
-            let styles = build_styles(config.text_styles)?;
-            // TODO: Implement sanity checks to confirm all styles are defined and all sprites are in flash
-            Ok(Self { screen, styles })
-        } else {
-            Err(ScreenBuildError::CouldNotGetScreen)
-        }
+        let styles = build_styles(config.text_styles)?;
+        // TODO: Implement sanity checks to confirm all styles are defined and all sprites are in flash
+        Ok(Self {
+            screen: config.screen,
+            styles,
+        })
     }
 }
 
@@ -214,6 +215,86 @@ impl Alignment {
             Alignment::Left => embedded_graphics::text::Alignment::Left,
             Alignment::Center => embedded_graphics::text::Alignment::Center,
             Alignment::Right => embedded_graphics::text::Alignment::Right,
+        }
+    }
+}
+
+pub struct ScrollAnimationInstance {
+    animation: ScrollAnimation,
+    screen_size: Size,
+    canvas_size: Size,
+}
+
+impl ScrollAnimationInstance {
+    pub fn still() -> Self {
+        ScrollAnimationInstance {
+            animation: ScrollAnimation::Still,
+            screen_size: Size {
+                width: 0,
+                height: 0,
+            },
+            canvas_size: Size {
+                width: 0,
+                height: 0,
+            },
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        match self.animation {
+            ScrollAnimation::Still => 0,
+            ScrollAnimation::TopToBottom {
+                animation_tick,
+                starting_delay,
+            } => {
+                let starting_ticks = starting_delay.div_duration_f32(animation_tick) as usize;
+                let num_pixels_to_scroll =
+                    (self.canvas_size.height - self.screen_size.height) as usize;
+                starting_ticks + num_pixels_to_scroll
+            }
+        }
+    }
+
+    pub fn needs_redraw(&self, last_draw: embassy_time::Instant) -> bool {
+        match self.animation {
+            ScrollAnimation::Still => false,
+            ScrollAnimation::TopToBottom { animation_tick, .. } => {
+                last_draw.elapsed()
+                    > embassy_time::Duration::from_millis(animation_tick.as_millis() as u64)
+            }
+        }
+    }
+
+    /// The embedded implementation assumes that the returned iterator never exhausts!
+    pub fn iter(&self) -> Box<dyn Iterator<Item = embedded_graphics::prelude::Point>> {
+        match self.animation {
+            ScrollAnimation::TopToBottom {
+                starting_delay,
+                animation_tick,
+            } => {
+                let starting_ticks = starting_delay.div_duration_f32(animation_tick) as usize;
+                let num_pixels_to_scroll = self.canvas_size.height - self.screen_size.height;
+                Box::new(
+                    repeat(embedded_graphics::prelude::Point::zero())
+                        .take(starting_ticks)
+                        .chain(
+                            (1..num_pixels_to_scroll)
+                                .map(|v| embedded_graphics::prelude::Point { x: 0, y: v as i32 }),
+                        )
+                        .cycle(),
+                )
+            }
+            ScrollAnimation::Still => Box::new(repeat(embedded_graphics::prelude::Point::zero())),
+        }
+    }
+}
+
+impl ScrollAnimation {
+    pub fn instance(self, screen_size: Size, canvas_size: Size) -> ScrollAnimationInstance {
+        ScrollAnimationInstance {
+            animation: self,
+            screen_size,
+            canvas_size,
         }
     }
 }

@@ -9,7 +9,7 @@
 #![feature(impl_trait_in_assoc_type)]
 
 use core::sync::atomic::Ordering;
-use embassy_executor::{task, Spawner};
+use embassy_executor::{Spawner, task};
 use embassy_net::StackResources;
 use embassy_time::{Duration, Timer};
 use esp_backtrace as _;
@@ -18,15 +18,15 @@ use esp_hal::interrupt::software::SoftwareInterruptControl;
 use esp_hal::rng::Rng;
 use esp_hal::{clock::CpuClock, timer::timg::TimerGroup};
 use esp_hub75::Hub75Pins8;
-use headless_display::flash::{flash_init, flash_task, FlashType};
-use headless_display::panel::init_led_panel;
-use headless_display::panel::REFRESH_RATE;
-use headless_display::rest::{web_task, AppProps, WEB_TASK_POOL_SIZE};
-use headless_display::ui::display_task;
 use headless_display::CONFIG;
+use headless_display::flash::{FlashType, flash_init, flash_task};
+use headless_display::panel::REFRESH_RATE;
+use headless_display::panel::init_led_panel;
+use headless_display::rest::{AppProps, WEB_TASK_POOL_SIZE, web_task};
+use headless_display::ui::display_task;
 use headless_display::{
-    panel::{hub75_task, FrameBufferExchange, Hub75Peripherals},
-    wifi::{connection, net_task, CurrentStateSignal, SystemState},
+    panel::{FrameBufferExchange, Hub75Peripherals, hub75_task},
+    wifi::{CurrentStateSignal, SystemState, connection, net_task},
 };
 use log::info;
 use picoserve::{AppBuilder, AppRouter};
@@ -243,6 +243,10 @@ async fn main(spawner: Spawner) {
 
     let stats = esp_alloc::HEAP.stats();
     info!("Total used heap: {stats}");
+
+    // optionally for debugging the FPS can be logged
+
+    spawner.must_spawn(log_fps());
 
     loop {
         Timer::after(Duration::from_secs(20)).await;

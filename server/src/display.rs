@@ -105,7 +105,7 @@ pub fn build_display(weather_data: &WeatherData, transport_data: &TransportData)
         Element::new_line(Point::new(X_START, 0), Point::new(X_START, 17), "FFFFFF").with_stroke(1),
     );
 
-    Configuration::new(vec![Screen { elements }])
+    Configuration::new(Screen::new(elements, 192, 96))
         .add_style("clock", TextStyle::new("FFFFFF", FontName::Font7X13Bold))
         .add_style("arrival", TextStyle::new("FFFFFF", FontName::Font7X13Bold))
         .add_style("weather_hl", TextStyle::new("FFFFFF", FontName::Font5X7))

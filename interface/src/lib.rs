@@ -1,6 +1,8 @@
 #![no_std]
 
 extern crate alloc;
+use core::time::Duration;
+
 use crate::alloc::string::ToString;
 use alloc::collections::btree_map::BTreeMap;
 use alloc::string::String;
@@ -428,33 +430,77 @@ impl TextStyle {
     }
 }
 
+#[derive(Deserialize, Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "server", derive(Serialize, JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub enum ScrollAnimation {
+    /// Not animated
+    Still,
+    /// Scroll the screen from the top to the bottom.
+    /// Once reaching the bottom it will reset to the top without scrolling
+    TopToBottom {
+        /// Delay before the screen will start scrolling down
+        starting_delay: Duration,
+        /// Time between scrolling one pixel
+        animation_tick: Duration,
+    },
+}
+
+impl Default for ScrollAnimation {
+    fn default() -> Self {
+        ScrollAnimation::Still
+    }
+}
+
 #[derive(Deserialize, Debug, PartialEq)]
 #[cfg_attr(feature = "server", derive(Serialize, JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct Screen {
     /// Array of elements to display on the screen
     pub elements: Vec<Element>,
+    /// Scrolling of the screen
+    pub scroll_animation: ScrollAnimation,
+    /// size of the physical screen in pixels (width, height).
+    pub screen_size: Size,
+    /// size of the virtual canvas that is drawn to the display
+    pub canvas_size: Size,
 }
 
 impl Screen {
-    pub fn new(elements: Vec<Element>) -> Self {
-        Self { elements }
+    /// Create a new screen from elements and a size
+    pub fn new(elements: Vec<Element>, width: u32, height: u32) -> Self {
+        Self {
+            elements,
+            scroll_animation: ScrollAnimation::Still,
+            screen_size: Size { width, height },
+            canvas_size: Size { width, height },
+        }
+    }
+
+    pub fn with_canvas_size(mut self, animation: ScrollAnimation) -> Self {
+        self.scroll_animation = animation;
+        self
+    }
+
+    pub fn with_scroll_animation(mut self, animation: ScrollAnimation) -> Self {
+        self.scroll_animation = animation;
+        self
     }
 }
 
 #[derive(Deserialize, Debug, PartialEq)]
 #[cfg_attr(feature = "server", derive(Serialize, JsonSchema))]
 pub struct Configuration {
-    /// Array of screens to display. For now only the first screen is acutally read.
-    pub screens: Vec<Screen>,
+    /// Array of screens to display. For now only the first screen is actually read.
+    pub screen: Screen,
     /// Map of text styles
     pub text_styles: GlobalStylesType,
 }
 
 impl Configuration {
-    pub fn new(screens: Vec<Screen>) -> Self {
+    pub fn new(screen: Screen) -> Self {
         Self {
-            screens,
+            screen,
             text_styles: GlobalStylesType::new(),
         }
     }

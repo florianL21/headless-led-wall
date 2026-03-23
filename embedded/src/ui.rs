@@ -1,13 +1,13 @@
-use core::sync::atomic::Ordering;
+use core::{iter::repeat, sync::atomic::Ordering};
 
 use crate::{
-    flash::{make_buf, FlashType},
-    panel::{FrameBufferExchange, TiledFBType, SYSTEM_IS_UP},
-    resources::{bake, get_dino_sprite, get_no_image_sprite, get_wifi_sprite, BakedResource},
+    flash::{FlashType, make_buf},
+    panel::{FrameBufferExchange, SYSTEM_IS_UP, TiledFBType},
+    resources::{BakedResource, bake, get_dino_sprite, get_no_image_sprite, get_wifi_sprite},
     rest::DISPLAY_CONFIG_SIGNAL,
     wifi::{CurrentStateSignal, SystemState},
 };
-use alloc::{collections::btree_map::BTreeMap, string::String, vec::Vec};
+use alloc::{boxed::Box, collections::btree_map::BTreeMap, string::String, vec::Vec};
 use embassy_executor::task;
 use embassy_time::{Duration, Instant, Timer};
 use embedded_graphics::Drawable;
@@ -15,7 +15,7 @@ use embedded_graphics::{geometry::Point, primitives::Line};
 use embedded_graphics::{image::Image, primitives::PrimitiveStyleBuilder};
 use embedded_graphics::{mono_font::MonoTextStyleBuilder, primitives::Rectangle};
 use embedded_graphics::{
-    mono_font::{ascii::FONT_5X7, MonoTextStyle},
+    mono_font::{MonoTextStyle, ascii::FONT_5X7},
     primitives::Polyline,
 };
 use embedded_graphics::{pixelcolor::Rgb888, primitives::PrimitiveStyle};
@@ -24,10 +24,12 @@ use embedded_graphics::{primitives::RoundedRectangle, text::Text};
 use embedded_layout::{layout::linear::LinearLayout, prelude::*};
 use esp_hub75::Color;
 use interface::{
-    embedded::{string_to_color, CheckedScreenConfig},
-    Resource,
+    Element, RectangleCorners, Screen, ScrollAnimation, embedded::ScrollAnimationInstance,
 };
-use interface::{Element, RectangleCorners};
+use interface::{
+    Resource,
+    embedded::{CheckedScreenConfig, string_to_color},
+};
 use log::{error, info};
 use postcard::from_bytes;
 
@@ -130,9 +132,10 @@ async fn render_config(
     sprite_register: &mut SpriteRegister,
     err_img: &mut BakedResource,
     now: Instant,
+    offset: Point,
 ) {
     for element in config.screen.elements.iter_mut() {
-        let pos = element.position();
+        let pos = element.position() - offset;
         match element {
             interface::Element::Sprite { name, center, .. } => {
                 if let Some(img) = sprite_register.get_sprite(name, now).await {
@@ -171,7 +174,7 @@ async fn render_config(
                 stroke,
             } => {
                 let style = make_primitive_style(color, stroke, &None);
-                Line::new(start.into(), end.into())
+                Line::new(start.point() - offset, end.point() - offset)
                     .into_styled(style)
                     .draw(fb)
                     .ok();
@@ -182,7 +185,7 @@ async fn render_config(
                 points,
             } => {
                 let style = make_primitive_style(color, stroke, &None);
-                let points: Vec<Point> = points.iter().map(|p| p.into()).collect();
+                let points: Vec<Point> = points.iter().map(|p| p.point() - offset).collect();
                 Polyline::new(points.as_slice())
                     .into_styled(style)
                     .draw(fb)
@@ -197,7 +200,7 @@ async fn render_config(
                 rounded_corners,
             } => {
                 let style = make_primitive_style(stroke_color, stroke, fill_color);
-                let rect = Rectangle::new(top_left.into(), size.into());
+                let rect = Rectangle::new(top_left.point() - offset, size.into());
                 if let Some(corners) = rounded_corners {
                     let corners = match corners {
                         RectangleCorners::Uniform(size) => {
@@ -274,6 +277,55 @@ fn draw_connect_screen(
     }
 }
 
+struct ScrollAnimationState {
+    anim: ScrollAnimationInstance,
+    last_update: Instant,
+    current_offset: Point,
+    iterator: Box<dyn Iterator<Item = Point>>,
+    counter: usize,
+    anim_len: usize,
+}
+
+impl ScrollAnimationState {
+    fn new(anim: ScrollAnimationInstance) -> Self {
+        let mut iter = anim.iter();
+        let point = iter
+            .next()
+            .expect("ScrollAnimation must yield at least one point");
+        let anim_len = anim.len();
+        ScrollAnimationState {
+            anim: anim,
+            last_update: Instant::now(),
+            iterator: iter,
+            current_offset: point,
+            counter: 0,
+            anim_len,
+        }
+    }
+
+    fn current_offset(&self) -> Point {
+        self.current_offset
+    }
+
+    fn needs_update(&mut self) -> bool {
+        if self.anim.needs_redraw(self.last_update) {
+            self.last_update = Instant::now();
+            self.current_offset = self.iterator.next().expect("ScrollAnimation iterator must never exhaust. Check your implementation and potentially add a .cycle() call to it");
+            self.counter += 1;
+            if self.counter >= self.anim_len {
+                self.counter = 0;
+            }
+            true
+        } else {
+            false
+        }
+    }
+
+    fn is_finished(&self) -> bool {
+        self.counter == self.anim_len
+    }
+}
+
 #[task]
 pub async fn display_task(
     rx: &'static FrameBufferExchange,
@@ -301,6 +353,8 @@ pub async fn display_task(
     let mut sprite_register = SpriteRegister::new(flash);
     let mut needs_render = true;
 
+    let mut current_animation = ScrollAnimationState::new(ScrollAnimationInstance::still());
+
     loop {
         if wifi_up.signaled() {
             wifi_state = wifi_up.wait().await;
@@ -327,14 +381,32 @@ pub async fn display_task(
                             .collect();
                         sprite_register.clear(keep.as_slice());
                         sprite_register.prepare(keep.as_slice()).await;
+                        current_animation = ScrollAnimationState::new(
+                            conf.screen.scroll_animation.clone().instance(
+                                conf.screen.screen_size.clone(),
+                                conf.screen.canvas_size.clone(),
+                            ),
+                        );
                     } else {
                         sprite_register.clear(&[]);
                     }
                     needs_render = true;
                 }
                 if let Some(ref mut conf) = display_config {
-                    if must_redraw(sprite_register.needs_redraw(now), &mut needs_render, fb) {
-                        render_config(fb, conf, &mut sprite_register, &mut err_img, now).await;
+                    if must_redraw(
+                        sprite_register.needs_redraw(now) || current_animation.needs_update(),
+                        &mut needs_render,
+                        fb,
+                    ) {
+                        render_config(
+                            fb,
+                            conf,
+                            &mut sprite_register,
+                            &mut err_img,
+                            now,
+                            current_animation.current_offset(),
+                        )
+                        .await;
                     }
                 } else if must_redraw(dino.needs_update(now), &mut needs_render, fb) {
                     if let Ok(img) = dino.get_image(now) {
