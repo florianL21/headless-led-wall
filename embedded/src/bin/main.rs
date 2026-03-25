@@ -8,8 +8,7 @@
 #![feature(type_alias_impl_trait)]
 #![feature(impl_trait_in_assoc_type)]
 
-use core::sync::atomic::Ordering;
-use embassy_executor::{Spawner, task};
+use embassy_executor::Spawner;
 use embassy_net::StackResources;
 use embassy_time::{Duration, Timer};
 use esp_backtrace as _;
@@ -20,7 +19,6 @@ use esp_hal::{clock::CpuClock, timer::timg::TimerGroup};
 use esp_hub75::Hub75Pins8;
 use headless_display::CONFIG;
 use headless_display::flash::{FlashType, flash_init, flash_task};
-use headless_display::panel::REFRESH_RATE;
 use headless_display::panel::init_led_panel;
 use headless_display::rest::{AppProps, WEB_TASK_POOL_SIZE, web_task};
 use headless_display::ui::display_task;
@@ -40,14 +38,6 @@ extern crate alloc;
 esp_bootloader_esp_idf::esp_app_desc!();
 
 const TARGET_PANEL_FRAME_RATE: u32 = CONFIG.panel.target_fps as u32;
-
-#[task]
-async fn log_fps() {
-    loop {
-        Timer::after(Duration::from_millis(1000)).await;
-        info!("FPS: {}", REFRESH_RATE.load(Ordering::Relaxed));
-    }
-}
 
 #[esp_rtos::main]
 async fn main(spawner: Spawner) {
@@ -243,12 +233,4 @@ async fn main(spawner: Spawner) {
 
     let stats = esp_alloc::HEAP.stats();
     info!("Total used heap: {stats}");
-
-    // optionally for debugging the FPS can be logged
-
-    spawner.must_spawn(log_fps());
-
-    loop {
-        Timer::after(Duration::from_secs(20)).await;
-    }
 }

@@ -1,4 +1,4 @@
-use core::{iter::repeat, sync::atomic::Ordering};
+use core::sync::atomic::Ordering;
 
 use crate::{
     flash::{FlashType, make_buf},
@@ -8,6 +8,7 @@ use crate::{
     wifi::{CurrentStateSignal, SystemState},
 };
 use alloc::{boxed::Box, collections::btree_map::BTreeMap, string::String, vec::Vec};
+use average::{Estimate, Variance};
 use embassy_executor::task;
 use embassy_time::{Duration, Instant, Timer};
 use embedded_graphics::Drawable;
@@ -23,15 +24,15 @@ use embedded_graphics::{prelude::*, primitives::CornerRadiiBuilder};
 use embedded_graphics::{primitives::RoundedRectangle, text::Text};
 use embedded_layout::{layout::linear::LinearLayout, prelude::*};
 use esp_hub75::Color;
-use interface::{
-    Element, RectangleCorners, Screen, ScrollAnimation, embedded::ScrollAnimationInstance,
-};
+use interface::{Element, RectangleCorners, embedded::ScrollAnimationInstance};
 use interface::{
     Resource,
     embedded::{CheckedScreenConfig, string_to_color},
 };
 use log::{error, info};
 use postcard::from_bytes;
+
+const LOG_INTERVAL: Duration = Duration::from_secs(5);
 
 struct SpriteRegister {
     sprites: BTreeMap<String, BakedResource>,
@@ -355,6 +356,9 @@ pub async fn display_task(
 
     let mut current_animation = ScrollAnimationState::new(ScrollAnimationInstance::still());
 
+    let mut render_time = Variance::new();
+    let mut last_log = Instant::now();
+
     loop {
         if wifi_up.signaled() {
             wifi_state = wifi_up.wait().await;
@@ -463,6 +467,7 @@ pub async fn display_task(
                 );
             }
         }
+        render_time.add(now.elapsed().as_micros() as f64);
         // only exchange the framebuffers if there is something new to render
         if needs_render {
             needs_render = false;
@@ -473,6 +478,16 @@ pub async fn display_task(
         } else {
             // give other tasks some time to run as well
             Timer::after(Duration::from_millis(30)).await;
+        }
+
+        if last_log.elapsed() > LOG_INTERVAL {
+            info!(
+                "render time: {:.2} us ± {:.2}",
+                render_time.mean(),
+                render_time.error()
+            );
+            render_time = Variance::new();
+            last_log = Instant::now();
         }
     }
 }

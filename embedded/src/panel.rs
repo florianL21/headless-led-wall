@@ -1,5 +1,5 @@
 use crate::CONFIG;
-use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use embassy_executor::task;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::signal::Signal;
@@ -7,12 +7,13 @@ use embassy_time::{Duration, Instant, Ticker};
 use esp_hal::gpio::{AnyPin, Level, Output, OutputConfig};
 use esp_hal::ledc::channel::ChannelIFace;
 use esp_hal::ledc::timer::TimerIFace;
-use esp_hal::ledc::{timer, LSGlobalClkSource, Ledc, LowSpeed};
+use esp_hal::ledc::{LSGlobalClkSource, Ledc, LowSpeed, timer};
 
+use average::{Estimate, Variance};
 use esp_hal::time::Rate;
 use esp_hub75::framebuffer::{compute_frame_count, compute_rows, latched::DmaFrameBuffer};
 use esp_hub75::{Hub75, Hub75Pins8};
-use hub75_framebuffer::tiling::{compute_tiled_cols, ChainTopRightDown, TiledFrameBuffer};
+use hub75_framebuffer::tiling::{ChainTopRightDown, TiledFrameBuffer, compute_tiled_cols};
 use log::{error, info};
 use static_cell::StaticCell;
 
@@ -34,8 +35,9 @@ const PANEL_COLS: usize = CONFIG.panel.panel_width as usize;
 const FB_COLS: usize = compute_tiled_cols(PANEL_COLS, TILED_ROWS, TILED_COLS);
 const NROWS: usize = compute_rows(ROWS);
 const FRAME_COUNT: usize = compute_frame_count(BITS);
+const LOG_INTERVAL: Duration = Duration::from_secs(5);
+const FPS_INTERVAL: Duration = Duration::from_secs(1);
 
-pub static REFRESH_RATE: AtomicU32 = AtomicU32::new(0);
 pub static PANEL_ON: AtomicBool = AtomicBool::new(true);
 pub static SYSTEM_IS_UP: AtomicBool = AtomicBool::new(false);
 pub static BRIGHTNESS: AtomicU8 = AtomicU8::new(CONFIG.panel.initial_brightness as u8);
@@ -96,8 +98,8 @@ fn init_fbs_stack() -> (&'static mut TiledFBType, &'static mut TiledFBType) {
     (fb0, fb1)
 }
 
-pub fn init_led_panel<const USE_HEAP: bool>(
-) -> (&'static mut TiledFBType, &'static mut TiledFBType, Rate) {
+pub fn init_led_panel<const USE_HEAP: bool>()
+-> (&'static mut TiledFBType, &'static mut TiledFBType, Rate) {
     let (fb0, fb1) = if USE_HEAP {
         init_fbs_heap()
     } else {
@@ -169,8 +171,18 @@ pub async fn hub75_task(
 
     let mut panel_is_on = true;
     let mut prev_state: u8 = brightness;
+    let mut last_transfer_end = Instant::now();
+
+    let mut transfer_time = Variance::new();
+    let mut transfer_jitter = Variance::new();
+    let mut fps = Variance::new();
+
+    let mut last_log = Instant::now();
 
     loop {
+        let transfer_start = Instant::now();
+        transfer_jitter.add((transfer_start - last_transfer_end).as_micros() as f64);
+
         let curr_on_state = PANEL_ON.load(Ordering::Relaxed);
         brightness = BRIGHTNESS.load(Ordering::Relaxed);
         if curr_on_state != panel_is_on {
@@ -214,14 +226,34 @@ pub async fn hub75_task(
             }
         }
 
+        transfer_time.add(transfer_start.elapsed().as_micros() as f64);
+
+        last_transfer_end = Instant::now();
         ticker.next().await;
 
         count += 1;
-        const FPS_INTERVAL: Duration = Duration::from_secs(1);
         if start.elapsed() > FPS_INTERVAL {
-            REFRESH_RATE.store(count, Ordering::Relaxed);
+            fps.add(count as f64);
             count = 0;
             start = Instant::now();
+        }
+
+        if last_log.elapsed() > LOG_INTERVAL {
+            info!("Framerate: {:.2} fps ± {:.2}", fps.mean(), fps.error());
+            info!(
+                "Transfer time: {:.2} us ± {:.2}",
+                transfer_time.mean(),
+                transfer_time.error()
+            );
+            info!(
+                "Time between transfers: {:.2} us ± {:.2}",
+                transfer_jitter.mean(),
+                transfer_jitter.error()
+            );
+            transfer_time = Variance::new();
+            transfer_jitter = Variance::new();
+            fps = Variance::new();
+            last_log = Instant::now();
         }
     }
 }
