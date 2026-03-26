@@ -313,7 +313,7 @@ impl ScrollAnimationState {
             self.last_update = Instant::now();
             self.current_offset = self.iterator.next().expect("ScrollAnimation iterator must never exhaust. Check your implementation and potentially add a .cycle() call to it");
             self.counter += 1;
-            if self.counter >= self.anim_len {
+            if self.counter > self.anim_len {
                 self.counter = 0;
             }
             true
@@ -323,7 +323,7 @@ impl ScrollAnimationState {
     }
 
     fn is_finished(&self) -> bool {
-        self.counter == self.anim_len
+        self.counter >= self.anim_len
     }
 }
 
@@ -350,6 +350,8 @@ pub async fn display_task(
 
     let display_area = fb.bounding_box();
 
+    let mut new_display_config = None;
+
     let mut display_config = None;
     let mut sprite_register = SpriteRegister::new(flash);
     let mut needs_render = true;
@@ -369,7 +371,13 @@ pub async fn display_task(
             SystemState::Ready | SystemState::WIFIConnected => {
                 SYSTEM_IS_UP.store(true, Ordering::Relaxed);
                 if DISPLAY_CONFIG_SIGNAL.signaled() {
-                    display_config = DISPLAY_CONFIG_SIGNAL.wait().await;
+                    new_display_config = DISPLAY_CONFIG_SIGNAL.wait().await;
+                    if new_display_config.is_none() {
+                        sprite_register.clear(&[]);
+                    }
+                }
+                if new_display_config.is_some() && current_animation.is_finished() {
+                    display_config = new_display_config.take();
                     if let Some(ref conf) = display_config {
                         let keep: Vec<_> = conf
                             .screen
@@ -391,10 +399,8 @@ pub async fn display_task(
                                 conf.screen.canvas_size.clone(),
                             ),
                         );
-                    } else {
-                        sprite_register.clear(&[]);
+                        needs_render = true;
                     }
-                    needs_render = true;
                 }
                 if let Some(ref mut conf) = display_config {
                     if must_redraw(

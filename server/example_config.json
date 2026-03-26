@@ -94,6 +94,19 @@
                 }
             },
             {
+                "Rectangle": {
+                    "fill_color": "004F4F",
+                    "top_left": {
+                        "x": 30,
+                        "y": 52
+                    },
+                    "size": {
+                        "height": 10,
+                        "width": 20
+                    }
+                }
+            },
+            {
                 "Polyline": {
                     "color": "00FF00",
                     "stroke": 1,
@@ -119,27 +132,6 @@
                             "y": 40
                         }
                     ]
-                }
-            },
-            {
-                "Rectangle": {
-                    "fill_color": "00FFFF",
-                    "stroke": 2,
-                    "rounded_corners": {
-                        "Uniform": {
-                            "height": 3,
-                            "width": 3
-                        }
-                    },
-                    "top_left": {
-                        "x": 30,
-                        "y": 5
-                    },
-                    "size": {
-                        "height": 10,
-                        "width": 20
-                    },
-                    "stroke_color": "0000FF"
                 }
             }
         ],
