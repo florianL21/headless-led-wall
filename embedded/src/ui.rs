@@ -78,15 +78,15 @@ impl SpriteRegister {
     /// Prepare all sprites in the config to be rendered
     async fn prepare(&mut self, keys: &[&String]) {
         for name in keys {
-            if !self.sprites.contains_key(*name) {
-                if let Some(res) = bake_sprite(self.flash, name).await {
-                    self.sprites.insert((**name).clone(), res);
-                }
+            if !self.sprites.contains_key(*name)
+                && let Some(res) = bake_sprite(self.flash, name).await
+            {
+                self.sprites.insert((**name).clone(), res);
             };
         }
     }
 
-    async fn get_sprite<'a>(&'a mut self, name: &String, now: Instant) -> Option<tinyqoi::Qoi<'a>> {
+    fn get_sprite<'a>(&'a mut self, name: &String, now: Instant) -> Option<tinyqoi::Qoi<'a>> {
         let sprite = if self.sprites.contains_key(name) {
             self.sprites.get_mut(name)
         } else {
@@ -111,35 +111,35 @@ fn make_primitive_style(
     fill_color: &Option<String>,
 ) -> PrimitiveStyle<Color> {
     let mut style = PrimitiveStyleBuilder::new();
-    if let Some(color) = stroke_color {
-        if let Some(color) = string_to_color(color) {
-            style = style.stroke_color(color);
-        }
+    if let Some(color) = stroke_color
+        && let Some(color) = string_to_color(color)
+    {
+        style = style.stroke_color(color);
     }
     if let Some(stroke) = stroke_width {
         style = style.stroke_width(*stroke);
     }
-    if let Some(fill) = fill_color {
-        if let Some(fill) = string_to_color(fill) {
-            style = style.fill_color(fill)
-        }
+    if let Some(fill) = fill_color
+        && let Some(fill) = string_to_color(fill)
+    {
+        style = style.fill_color(fill)
     }
     style.build()
 }
 
 async fn render_config(
     fb: &mut TiledFBType,
-    config: &mut CheckedScreenConfig,
+    config: &CheckedScreenConfig,
     sprite_register: &mut SpriteRegister,
     err_img: &mut BakedResource,
     now: Instant,
     offset: Point,
 ) {
-    for element in config.screen.elements.iter_mut() {
+    for element in config.screen.elements.iter() {
         let pos = element.position() - offset;
         match element {
             interface::Element::Sprite { name, center, .. } => {
-                if let Some(img) = sprite_register.get_sprite(name, now).await {
+                if let Some(img) = sprite_register.get_sprite(name, now) {
                     if let Some(point) = center {
                         Image::with_center(&img, point.into()).draw(fb).ok();
                     } else {
@@ -260,21 +260,21 @@ fn draw_connect_screen(
     needs_render: &mut bool,
     message: &str,
 ) {
-    if must_redraw(wifi.needs_update(now), needs_render, fb) {
-        if let Ok(img) = wifi.get_image(now) {
-            LinearLayout::vertical(
-                Chain::new(Image::new(&img, Point::zero())).append(Text::new(
-                    message,
-                    Point::zero(),
-                    text_style,
-                )),
-            )
-            .with_alignment(horizontal::Center)
-            .arrange()
-            .align_to(&display_area, horizontal::Center, vertical::Center)
-            .draw(fb)
-            .ok();
-        }
+    if must_redraw(wifi.needs_update(now), needs_render, fb)
+        && let Ok(img) = wifi.get_image(now)
+    {
+        LinearLayout::vertical(
+            Chain::new(Image::new(&img, Point::zero())).append(Text::new(
+                message,
+                Point::zero(),
+                text_style,
+            )),
+        )
+        .with_alignment(horizontal::Center)
+        .arrange()
+        .align_to(&display_area, horizontal::Center, vertical::Center)
+        .draw(fb)
+        .ok();
     }
 }
 
@@ -295,7 +295,7 @@ impl ScrollAnimationState {
             .expect("ScrollAnimation must yield at least one point");
         let anim_len = anim.len();
         ScrollAnimationState {
-            anim: anim,
+            anim,
             last_update: Instant::now(),
             iterator: iter,
             current_offset: point,
@@ -313,7 +313,7 @@ impl ScrollAnimationState {
             self.last_update = Instant::now();
             self.current_offset = self.iterator.next().expect("ScrollAnimation iterator must never exhaust. Check your implementation and potentially add a .cycle() call to it");
             self.counter += 1;
-            if self.counter > self.anim_len {
+            if self.counter >= self.anim_len {
                 self.counter = 0;
             }
             true
@@ -323,7 +323,7 @@ impl ScrollAnimationState {
     }
 
     fn is_finished(&self) -> bool {
-        self.counter >= self.anim_len
+        self.counter >= self.anim_len - 1
     }
 }
 
@@ -367,110 +367,77 @@ pub async fn display_task(
             needs_render = true;
         }
         let now = Instant::now();
-        match wifi_state {
-            SystemState::Ready | SystemState::WIFIConnected => {
-                SYSTEM_IS_UP.store(true, Ordering::Relaxed);
-                if DISPLAY_CONFIG_SIGNAL.signaled() {
-                    new_display_config = DISPLAY_CONFIG_SIGNAL.wait().await;
-                    if new_display_config.is_none() {
-                        sprite_register.clear(&[]);
-                    }
+        let connect_message = match wifi_state {
+            SystemState::WIFIConnecting => Some("Connecting to WIFI"),
+            SystemState::Disconnected => Some("Lost WIFI..."),
+            SystemState::Failed => Some("Failed to connect. Retrying..."),
+            SystemState::WIFIWaitForIP => Some("Waiting for IP"),
+            SystemState::Ready | SystemState::WIFIConnected => None,
+        };
+        if let Some(msg) = connect_message {
+            SYSTEM_IS_UP.store(false, Ordering::Relaxed);
+            draw_connect_screen(
+                fb,
+                wifi_text_style,
+                display_area,
+                &mut wifi,
+                now,
+                &mut needs_render,
+                msg,
+            );
+        } else {
+            SYSTEM_IS_UP.store(true, Ordering::Relaxed);
+            if let Some(conf) = DISPLAY_CONFIG_SIGNAL.try_take() {
+                new_display_config = conf;
+                if new_display_config.is_none() {
+                    sprite_register.clear(&[]);
                 }
-                if new_display_config.is_some() && current_animation.is_finished() {
-                    display_config = new_display_config.take();
-                    if let Some(ref conf) = display_config {
-                        let keep: Vec<_> = conf
-                            .screen
-                            .elements
-                            .iter()
-                            .filter_map(|e| {
-                                if let Element::Sprite { name, .. } = e {
-                                    Some(name)
-                                } else {
-                                    None
-                                }
-                            })
-                            .collect();
-                        sprite_register.clear(keep.as_slice());
-                        sprite_register.prepare(keep.as_slice()).await;
-                        current_animation = ScrollAnimationState::new(
-                            conf.screen.scroll_animation.clone().instance(
-                                conf.screen.screen_size.clone(),
-                                conf.screen.canvas_size.clone(),
-                            ),
-                        );
-                        needs_render = true;
-                    }
+            }
+            if new_display_config.is_some() && current_animation.is_finished() {
+                display_config = new_display_config.take();
+                if let Some(ref conf) = display_config {
+                    let keep: Vec<_> = conf
+                        .screen
+                        .elements
+                        .iter()
+                        .filter_map(|e| {
+                            if let Element::Sprite { name, .. } = e {
+                                Some(name)
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
+                    sprite_register.clear(keep.as_slice());
+                    sprite_register.prepare(keep.as_slice()).await;
+                    current_animation =
+                        ScrollAnimationState::new(conf.screen.scroll_animation.clone().instance(
+                            conf.screen.screen_size.clone(),
+                            conf.screen.canvas_size.clone(),
+                        ));
+                    needs_render = true;
                 }
-                if let Some(ref mut conf) = display_config {
-                    if must_redraw(
-                        sprite_register.needs_redraw(now) || current_animation.needs_update(),
-                        &mut needs_render,
+            }
+            if let Some(ref mut conf) = display_config {
+                if must_redraw(
+                    sprite_register.needs_redraw(now) || current_animation.needs_update(),
+                    &mut needs_render,
+                    fb,
+                ) {
+                    render_config(
                         fb,
-                    ) {
-                        render_config(
-                            fb,
-                            conf,
-                            &mut sprite_register,
-                            &mut err_img,
-                            now,
-                            current_animation.current_offset(),
-                        )
-                        .await;
-                    }
-                } else if must_redraw(dino.needs_update(now), &mut needs_render, fb) {
-                    if let Ok(img) = dino.get_image(now) {
-                        Image::new(&img, Point::zero()).draw(fb).ok();
-                    }
+                        conf,
+                        &mut sprite_register,
+                        &mut err_img,
+                        now,
+                        current_animation.current_offset(),
+                    )
+                    .await;
                 }
-            }
-            SystemState::WIFIConnecting => {
-                SYSTEM_IS_UP.store(false, Ordering::Relaxed);
-                draw_connect_screen(
-                    fb,
-                    wifi_text_style,
-                    display_area,
-                    &mut wifi,
-                    now,
-                    &mut needs_render,
-                    "Connecting to WIFI",
-                );
-            }
-            SystemState::Disconnected => {
-                SYSTEM_IS_UP.store(false, Ordering::Relaxed);
-                draw_connect_screen(
-                    fb,
-                    wifi_text_style,
-                    display_area,
-                    &mut wifi,
-                    now,
-                    &mut needs_render,
-                    "Lost WIFI...",
-                );
-            }
-            SystemState::Failed => {
-                SYSTEM_IS_UP.store(false, Ordering::Relaxed);
-                draw_connect_screen(
-                    fb,
-                    wifi_text_style,
-                    display_area,
-                    &mut wifi,
-                    now,
-                    &mut needs_render,
-                    "Failed to connect. Retrying...",
-                );
-            }
-            SystemState::WIFIWaitForIP => {
-                SYSTEM_IS_UP.store(false, Ordering::Relaxed);
-                draw_connect_screen(
-                    fb,
-                    wifi_text_style,
-                    display_area,
-                    &mut wifi,
-                    now,
-                    &mut needs_render,
-                    "Waiting for IP",
-                );
+            } else if must_redraw(dino.needs_update(now), &mut needs_render, fb)
+                && let Ok(img) = dino.get_image(now)
+            {
+                Image::new(&img, Point::zero()).draw(fb).ok();
             }
         }
         render_time.add(now.elapsed().as_micros() as f64);

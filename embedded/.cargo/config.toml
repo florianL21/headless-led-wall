@@ -3,6 +3,8 @@ bc6 = "build --release --target riscv32imac-unknown-none-elf --features esp32c6"
 bs3 = "build --release --target xtensa-esp32s3-none-elf --features esp32s3,psram"
 rc6 = "run --release --target riscv32imac-unknown-none-elf --features esp32c6"
 rs3 = "run --release --target xtensa-esp32s3-none-elf --features esp32s3,psram"
+cs3 = "clippy --release --target xtensa-esp32s3-none-elf --features esp32s3,psram"
+cc6 = "clippy --release --target xtensa-esp32s3-none-elf --features esp32s3,psram"
 
 [target.xtensa-esp32s3-none-elf]
 # If your ESP fails to boot it is likely that it does not support the QIO flash mode, or that the flash size is configured to high
