@@ -3,6 +3,17 @@
   "title": "Configuration",
   "type": "object",
   "properties": {
+    "overlay": {
+      "description": "Optional screen which is overlaid always on top of the other screen",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Overlay"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "screen": {
       "description": "Array of screens to display. For now only the first screen is actually read.",
       "$ref": "#/$defs/Screen"
@@ -307,6 +318,23 @@
         "Profont14",
         "Profont18",
         "Profont24"
+      ]
+    },
+    "Overlay": {
+      "description": "An overlay is always drawn after the main screen, so \"over\" it.\nBut because of animations moving items around a user must make sure\nto fill the background of their overlay themselves as otherwise elements\nof the screen underneath it may stay behind.\n\nThis design decision was made to allow very complex overlays, not just\na single rectangular part of the screen",
+      "type": "object",
+      "properties": {
+        "elements": {
+          "description": "Array of elements to display on the screen",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Element"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "elements"
       ]
     },
     "Point": {

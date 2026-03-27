@@ -14,6 +14,7 @@ use embassy_time::{Duration, Timer};
 use esp_backtrace as _;
 use esp_hal::gpio::Pin;
 use esp_hal::interrupt::software::SoftwareInterruptControl;
+use esp_hal::ram;
 use esp_hal::rng::Rng;
 use esp_hal::{clock::CpuClock, timer::timg::TimerGroup};
 use esp_hub75::Hub75Pins8;
@@ -46,6 +47,7 @@ async fn main(spawner: Spawner) {
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
 
     esp_alloc::heap_allocator!(size: 82 * 1024);
+    esp_alloc::heap_allocator!(#[ram(reclaimed)] size: 64000);
 
     let peripherals = esp_hal::init(config);
     let timg0 = TimerGroup::new(peripherals.TIMG0);
@@ -231,6 +233,9 @@ async fn main(spawner: Spawner) {
         spawner.must_spawn(web_task(id, stack, app));
     }
 
-    let stats = esp_alloc::HEAP.stats();
-    info!("Total used heap: {stats}");
+    // loop {
+    //     let stats = esp_alloc::HEAP.stats();
+    //     info!("Total used heap: {stats}");
+    //     Timer::after_secs(10).await;
+    // }
 }

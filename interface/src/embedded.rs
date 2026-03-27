@@ -2,8 +2,8 @@ use core::iter::repeat;
 
 use super::TextStyle;
 use crate::{
-    Alignment, Configuration, Element, FontName, GlobalStylesType, Point, Screen, ScrollAnimation,
-    Size,
+    Alignment, Configuration, Element, FontName, GlobalStylesType, Overlay, Point, Screen,
+    ScrollAnimation, Size,
 };
 use alloc::boxed::Box;
 use alloc::collections::btree_map::BTreeMap;
@@ -29,6 +29,7 @@ pub type BuiltTextStyles = BTreeMap<String, MonoTextStyle<'static, Rgb888>>;
 
 pub struct CheckedScreenConfig {
     pub screen: Screen,
+    pub overlay: Option<Overlay>,
     pub styles: BuiltTextStyles,
 }
 
@@ -38,6 +39,7 @@ impl CheckedScreenConfig {
         // TODO: Implement sanity checks to confirm all styles are defined and all sprites are in flash
         Ok(Self {
             screen: config.screen,
+            overlay: config.overlay,
             styles,
         })
     }

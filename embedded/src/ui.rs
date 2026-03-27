@@ -1,6 +1,7 @@
 use core::sync::atomic::Ordering;
 
 use crate::{
+    DEBUG_DISPLAY,
     flash::{FlashType, make_buf},
     panel::{FrameBufferExchange, SYSTEM_IS_UP, TiledFBType},
     resources::{BakedResource, bake, get_dino_sprite, get_no_image_sprite, get_wifi_sprite},
@@ -24,11 +25,11 @@ use embedded_graphics::{prelude::*, primitives::CornerRadiiBuilder};
 use embedded_graphics::{primitives::RoundedRectangle, text::Text};
 use embedded_layout::{layout::linear::LinearLayout, prelude::*};
 use esp_hub75::Color;
-use interface::{Element, RectangleCorners, embedded::ScrollAnimationInstance};
 use interface::{
-    Resource,
-    embedded::{CheckedScreenConfig, string_to_color},
+    Element, RectangleCorners,
+    embedded::{BuiltTextStyles, ScrollAnimationInstance},
 };
+use interface::{Resource, embedded::string_to_color};
 use log::{error, info};
 use postcard::from_bytes;
 
@@ -129,13 +130,14 @@ fn make_primitive_style(
 
 async fn render_config(
     fb: &mut TiledFBType,
-    config: &CheckedScreenConfig,
+    elements: &Vec<Element>,
+    styles: &BuiltTextStyles,
     sprite_register: &mut SpriteRegister,
     err_img: &mut BakedResource,
     now: Instant,
     offset: Point,
 ) {
-    for element in config.screen.elements.iter() {
+    for element in elements.iter() {
         let pos = element.position() - offset;
         match element {
             interface::Element::Sprite { name, center, .. } => {
@@ -156,7 +158,7 @@ async fn render_config(
             interface::Element::Text {
                 style, text, align, ..
             } => {
-                if let Some(style) = config.styles.get(style) {
+                if let Some(style) = styles.get(style) {
                     if let Some(align) = align {
                         Text::with_alignment(text, pos, *style, align.alignment())
                             .draw(fb)
@@ -323,7 +325,7 @@ impl ScrollAnimationState {
     }
 
     fn is_finished(&self) -> bool {
-        self.counter >= self.anim_len - 1
+        self.counter >= self.anim_len.saturating_sub(1)
     }
 }
 
@@ -388,12 +390,14 @@ pub async fn display_task(
         } else {
             SYSTEM_IS_UP.store(true, Ordering::Relaxed);
             if let Some(conf) = DISPLAY_CONFIG_SIGNAL.try_take() {
+                info!("got new config!");
                 new_display_config = conf;
                 if new_display_config.is_none() {
                     sprite_register.clear(&[]);
                 }
             }
             if new_display_config.is_some() && current_animation.is_finished() {
+                info!("display new config!");
                 display_config = new_display_config.take();
                 if let Some(ref conf) = display_config {
                     let keep: Vec<_> = conf
@@ -426,13 +430,26 @@ pub async fn display_task(
                 ) {
                     render_config(
                         fb,
-                        conf,
+                        &conf.screen.elements,
+                        &conf.styles,
                         &mut sprite_register,
                         &mut err_img,
                         now,
                         current_animation.current_offset(),
                     )
                     .await;
+                    if let Some(overlay) = &conf.overlay {
+                        render_config(
+                            fb,
+                            &overlay.elements,
+                            &conf.styles,
+                            &mut sprite_register,
+                            &mut err_img,
+                            now,
+                            Point::zero(),
+                        )
+                        .await;
+                    }
                 }
             } else if must_redraw(dino.needs_update(now), &mut needs_render, fb)
                 && let Ok(img) = dino.get_image(now)
@@ -453,7 +470,7 @@ pub async fn display_task(
             Timer::after(Duration::from_millis(30)).await;
         }
 
-        if last_log.elapsed() > LOG_INTERVAL {
+        if DEBUG_DISPLAY && last_log.elapsed() > LOG_INTERVAL {
             info!(
                 "render time: {:.2} us ± {:.2}",
                 render_time.mean(),

@@ -1,5 +1,32 @@
 {
     "$schema": "schema.json",
+    "overlay": {
+        "elements": [
+            {
+                "Rectangle": {
+                    "fill_color": "000600",
+                    "top_left": {
+                        "x": 0,
+                        "y": 0
+                    },
+                    "size": {
+                        "height": 9,
+                        "width": 25
+                    }
+                }
+            },
+            {
+                "Text": {
+                    "text": "Demo",
+                    "style": "default",
+                    "position": {
+                        "x": 0,
+                        "y": 7
+                    }
+                }
+            }
+        ]
+    },
     "screen": {
         "canvas_size": {
             "height": 64,

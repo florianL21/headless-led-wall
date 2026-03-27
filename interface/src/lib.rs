@@ -488,11 +488,35 @@ impl Screen {
     }
 }
 
+/// An overlay is always drawn after the main screen, so "over" it.
+/// But because of animations moving items around a user must make sure
+/// to fill the background of their overlay themselves as otherwise elements
+/// of the screen underneath it may stay behind.
+///
+/// This design decision was made to allow very complex overlays, not just
+/// a single rectangular part of the screen
+#[derive(Deserialize, Debug, PartialEq)]
+#[cfg_attr(feature = "server", derive(Serialize, JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct Overlay {
+    /// Array of elements to display on the screen
+    pub elements: Vec<Element>,
+}
+
+impl Overlay {
+    /// Create a new overlay from elements and a size
+    pub fn new(elements: Vec<Element>) -> Self {
+        Self { elements }
+    }
+}
+
 #[derive(Deserialize, Debug, PartialEq)]
 #[cfg_attr(feature = "server", derive(Serialize, JsonSchema))]
 pub struct Configuration {
     /// Array of screens to display. For now only the first screen is actually read.
     pub screen: Screen,
+    /// Optional screen which is overlaid always on top of the other screen
+    pub overlay: Option<Overlay>,
     /// Map of text styles
     pub text_styles: GlobalStylesType,
 }
@@ -502,7 +526,13 @@ impl Configuration {
         Self {
             screen,
             text_styles: GlobalStylesType::new(),
+            overlay: None,
         }
+    }
+
+    pub fn add_overlay(mut self, overlay: Overlay) -> Self {
+        self.overlay = Some(overlay);
+        self
     }
 
     pub fn add_style(mut self, name: &str, style: TextStyle) -> Self {

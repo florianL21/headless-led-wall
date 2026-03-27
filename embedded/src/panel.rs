@@ -1,4 +1,4 @@
-use crate::CONFIG;
+use crate::{CONFIG, DEBUG_DISPLAY};
 use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use embassy_executor::task;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
@@ -238,7 +238,7 @@ pub async fn hub75_task(
             start = Instant::now();
         }
 
-        if last_log.elapsed() > LOG_INTERVAL {
+        if DEBUG_DISPLAY && last_log.elapsed() > LOG_INTERVAL {
             info!("Framerate: {:.2} fps ± {:.2}", fps.mean(), fps.error());
             info!(
                 "Transfer time: {:.2} us ± {:.2}",
