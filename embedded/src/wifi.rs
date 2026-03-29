@@ -1,14 +1,8 @@
-use crate::CONFIG;
 use embassy_net::Runner;
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, signal::Signal};
 use embassy_time::{Duration, Timer};
-use esp_radio::wifi::{
-    ClientConfig, ModeConfig, WifiController, WifiDevice, WifiEvent, WifiStaState,
-};
-use log::{error, info};
-
-const SSID: &str = CONFIG.wifi.ssid;
-const PASSWORD: &str = CONFIG.wifi.password;
+use esp_radio::wifi::{Interface, WifiController};
+use log::{error, info, warn};
 
 pub enum SystemState {
     WIFIConnecting,
@@ -27,42 +21,29 @@ pub async fn connection(
     system_state: &'static CurrentStateSignal,
 ) {
     info!("start connection task");
-    info!("Device capabilities: {:?}", controller.capabilities());
-    loop {
-        if esp_radio::wifi::sta_state() == WifiStaState::Connected {
-            // wait until we're no longer connected
-            controller.wait_for_event(WifiEvent::StaDisconnected).await;
-            system_state.signal(SystemState::Disconnected);
-            Timer::after(Duration::from_millis(5000)).await
-        }
 
-        if !matches!(controller.is_started(), Ok(true)) {
-            let conf = ClientConfig::default()
-                .with_ssid(SSID.into())
-                .with_password(PASSWORD.into());
-            let client_config = ModeConfig::Client(conf);
-            controller.set_config(&client_config).unwrap();
-            info!("Starting wifi");
-            controller.start_async().await.unwrap();
-            info!("Wifi started!");
-        }
+    loop {
         info!("About to connect...");
 
         match controller.connect_async().await {
-            Ok(_) => {
-                info!("Wifi connected!");
+            Ok(info) => {
+                info!("Wifi connected to {:?}", info);
                 system_state.signal(SystemState::WIFIConnected);
+                // wait until we're no longer connected
+                let info = controller.wait_for_disconnect_async().await.ok();
+                warn!("Disconnected: {:?}", info);
+                system_state.signal(SystemState::Disconnected);
             }
             Err(e) => {
                 error!("Failed to connect to wifi: {e:?}");
                 system_state.signal(SystemState::Failed);
-                Timer::after(Duration::from_millis(5000)).await
             }
         }
+        Timer::after(Duration::from_millis(5000)).await
     }
 }
 
 #[embassy_executor::task]
-pub async fn net_task(mut runner: Runner<'static, WifiDevice<'static>>) {
+pub async fn net_task(mut runner: Runner<'static, Interface<'static>>) {
     runner.run().await
 }

@@ -18,6 +18,8 @@ use esp_hal::ram;
 use esp_hal::rng::Rng;
 use esp_hal::{clock::CpuClock, timer::timg::TimerGroup};
 use esp_hub75::Hub75Pins8;
+use esp_radio::wifi::sta::StationConfig;
+use esp_radio::wifi::{self, ControllerConfig};
 use headless_display::CONFIG;
 use headless_display::flash::{FlashType, flash_init, flash_task};
 use headless_display::panel::init_led_panel;
@@ -39,6 +41,8 @@ extern crate alloc;
 esp_bootloader_esp_idf::esp_app_desc!();
 
 const TARGET_PANEL_FRAME_RATE: u32 = CONFIG.panel.target_fps as u32;
+const SSID: &str = CONFIG.wifi.ssid;
+const PASSWORD: &str = CONFIG.wifi.password;
 
 #[esp_rtos::main]
 async fn main(spawner: Spawner) {
@@ -53,13 +57,7 @@ async fn main(spawner: Spawner) {
     let timg0 = TimerGroup::new(peripherals.TIMG0);
     let sw_int = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
 
-    cfg_if::cfg_if! {
-        if #[cfg(feature = "esp32c6")] {
-            esp_rtos::start(timg0.timer0, sw_int.software_interrupt0);
-        } else if #[cfg(feature = "esp32s3")] {
-            esp_rtos::start(timg0.timer0);
-        }
-    }
+    esp_rtos::start(timg0.timer0, sw_int.software_interrupt0);
 
     #[cfg(feature = "psram")]
     esp_alloc::psram_allocator!(peripherals.PSRAM, esp_hal::psram);
@@ -102,14 +100,14 @@ async fn main(spawner: Spawner) {
             let executor = InterruptExecutor::new(sw_int.software_interrupt2);
             let executor = EXECUTOR.init(executor);
             let high_prio_spawner = executor.start(Priority::max());
-            high_prio_spawner.must_spawn(hub75_task(
+            high_prio_spawner.spawn(hub75_task(
                 hub75_per,
                 &RX,
                 &TX,
                 fb1,
                 panel_freq,
                 TARGET_PANEL_FRAME_RATE,
-            ));
+            ).unwrap());
         } else if #[cfg(feature = "esp32s3")] {
             use esp_rtos::embassy::Executor;
 
@@ -117,46 +115,50 @@ async fn main(spawner: Spawner) {
             let app_core_stack = APP_CORE_STACK.init(Stack::new());
             esp_rtos::start_second_core(
                 peripherals.CPU_CTRL,
-                sw_int.software_interrupt0,
                 sw_int.software_interrupt1,
                 app_core_stack,
                 move || {
                     static EXECUTOR: StaticCell<Executor> = StaticCell::new();
                     let executor = EXECUTOR.init(Executor::new());
                     executor.run(|spawner| {
-                        spawner.must_spawn(hub75_task(
+                        spawner.spawn(hub75_task(
                         hub75_per,
                         &RX,
                         &TX,
                         fb1,
                         panel_freq,
                         TARGET_PANEL_FRAME_RATE,
-                    ));
+                    ).unwrap());
                     });
                 },
             );
         }
     }
 
-    spawner.must_spawn(flash_task(flash));
-    spawner.must_spawn(display_task(&TX, &RX, fb0, &CURRENT_STATE, flash));
+    spawner.spawn(flash_task(flash).unwrap());
+    spawner.spawn(display_task(&TX, &RX, fb0, &CURRENT_STATE, flash).unwrap());
 
     let stats = esp_alloc::HEAP.stats();
     info!("After panel alloc: {stats}");
 
-    // spawner.must_spawn(log_fps());
-
     // WIFI init
     // Allocate the WIFI stack to the internal heap
 
-    static RADIO_INIT: StaticCell<esp_radio::Controller> = StaticCell::new();
-    let radio_init =
-        RADIO_INIT.init(esp_radio::init().expect("Failed to initialize Wi-Fi/BLE controller"));
-    let (controller, interfaces) =
-        esp_radio::wifi::new(radio_init, peripherals.WIFI, Default::default())
-            .expect("Failed to initialize Wi-Fi controller");
+    let station_config = wifi::Config::Station(
+        StationConfig::default()
+            .with_ssid(SSID)
+            .with_password(PASSWORD.into()),
+    );
 
-    let wifi_interface = interfaces.sta;
+    info!("Starting wifi");
+    let (controller, interfaces) = esp_radio::wifi::new(
+        peripherals.WIFI,
+        ControllerConfig::default().with_initial_config(station_config),
+    )
+    .unwrap();
+    info!("Wifi configured and started!");
+
+    let wifi_interface = interfaces.station;
 
     let config = embassy_net::Config::dhcpv4(Default::default());
 
@@ -172,8 +174,8 @@ async fn main(spawner: Spawner) {
         seed,
     );
 
-    spawner.must_spawn(connection(controller, &CURRENT_STATE));
-    spawner.must_spawn(net_task(runner));
+    spawner.spawn(connection(controller, &CURRENT_STATE).unwrap());
+    spawner.spawn(net_task(runner).unwrap());
 
     // TODO: handle system start properly. The wifi logo flashes briefly because the system is set to ready from 2 locations
     CURRENT_STATE.signal(SystemState::WIFIConnecting);
@@ -200,7 +202,7 @@ async fn main(spawner: Spawner) {
     let app = APP.init(AppProps.build_app());
 
     for id in 0..WEB_TASK_POOL_SIZE {
-        spawner.must_spawn(web_task(id, stack, app));
+        spawner.spawn(web_task(id, stack, app).unwrap());
     }
 
     // loop {
