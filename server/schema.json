@@ -495,6 +495,39 @@
           "required": [
             "TopToBottom"
           ]
+        },
+        {
+          "description": "Scroll the screen from the top to the bottom, then back up.",
+          "type": "object",
+          "properties": {
+            "DownAndUp": {
+              "type": "object",
+              "properties": {
+                "animation_tick": {
+                  "description": "Time between scrolling one pixel",
+                  "$ref": "#/$defs/Duration"
+                },
+                "bottom_delay": {
+                  "description": "Delay at the bottom of the screen before scrolling back up",
+                  "$ref": "#/$defs/Duration"
+                },
+                "top_delay": {
+                  "description": "Delay at the top of the screen before scrolling down",
+                  "$ref": "#/$defs/Duration"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "top_delay",
+                "bottom_delay",
+                "animation_tick"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "DownAndUp"
+          ]
         }
       ]
     },

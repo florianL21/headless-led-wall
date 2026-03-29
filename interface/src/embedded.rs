@@ -254,6 +254,17 @@ impl ScrollAnimationInstance {
                     (self.canvas_size.height - self.screen_size.height) as usize;
                 starting_ticks + num_pixels_to_scroll
             }
+            ScrollAnimation::DownAndUp {
+                top_delay,
+                bottom_delay,
+                animation_tick,
+            } => {
+                let starting_ticks = top_delay.div_duration_f32(animation_tick) as usize;
+                let end_ticks = bottom_delay.div_duration_f32(animation_tick) as usize;
+                let num_pixels_to_scroll =
+                    (self.canvas_size.height - self.screen_size.height) as usize;
+                starting_ticks + num_pixels_to_scroll * 2 + end_ticks
+            }
         }
     }
 
@@ -261,6 +272,10 @@ impl ScrollAnimationInstance {
         match self.animation {
             ScrollAnimation::Still => false,
             ScrollAnimation::TopToBottom { animation_tick, .. } => {
+                last_draw.elapsed()
+                    > embassy_time::Duration::from_millis(animation_tick.as_millis() as u64)
+            }
+            ScrollAnimation::DownAndUp { animation_tick, .. } => {
                 last_draw.elapsed()
                     > embassy_time::Duration::from_millis(animation_tick.as_millis() as u64)
             }
@@ -281,6 +296,37 @@ impl ScrollAnimationInstance {
                         .take(starting_ticks)
                         .chain(
                             (1..num_pixels_to_scroll)
+                                .map(|v| embedded_graphics::prelude::Point { x: 0, y: v as i32 }),
+                        )
+                        .cycle(),
+                )
+            }
+            ScrollAnimation::DownAndUp {
+                top_delay,
+                bottom_delay,
+                animation_tick,
+            } => {
+                let starting_ticks = top_delay.div_duration_f32(animation_tick) as usize;
+                let end_ticks = bottom_delay.div_duration_f32(animation_tick) as usize;
+                let num_pixels_to_scroll =
+                    (self.canvas_size.height - self.screen_size.height) as usize;
+                Box::new(
+                    repeat(embedded_graphics::prelude::Point::zero())
+                        .take(starting_ticks)
+                        .chain(
+                            (1..num_pixels_to_scroll)
+                                .map(|v| embedded_graphics::prelude::Point { x: 0, y: v as i32 }),
+                        )
+                        .chain(
+                            repeat(embedded_graphics::prelude::Point {
+                                x: 0,
+                                y: num_pixels_to_scroll as i32,
+                            })
+                            .take(end_ticks),
+                        )
+                        .chain(
+                            (1..num_pixels_to_scroll)
+                                .rev()
                                 .map(|v| embedded_graphics::prelude::Point { x: 0, y: v as i32 }),
                         )
                         .cycle(),

@@ -444,6 +444,15 @@ pub enum ScrollAnimation {
         /// Time between scrolling one pixel
         animation_tick: Duration,
     },
+    /// Scroll the screen from the top to the bottom, then back up.
+    DownAndUp {
+        /// Delay at the top of the screen before scrolling down
+        top_delay: Duration,
+        /// Delay at the bottom of the screen before scrolling back up
+        bottom_delay: Duration,
+        /// Time between scrolling one pixel
+        animation_tick: Duration,
+    },
 }
 
 impl Default for ScrollAnimation {

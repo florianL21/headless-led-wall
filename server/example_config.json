@@ -163,12 +163,16 @@
             }
         ],
         "scroll_animation": {
-            "TopToBottom": {
+            "DownAndUp": {
                 "animation_tick": {
                     "nanos": 200000000,
                     "secs": 0
                 },
-                "starting_delay": {
+                "top_delay": {
+                    "nanos": 0,
+                    "secs": 1
+                },
+                "bottom_delay": {
                     "nanos": 0,
                     "secs": 1
                 }
