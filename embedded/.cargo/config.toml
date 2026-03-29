@@ -12,9 +12,20 @@ runner = "espflash flash --monitor --chip esp32s3 --flash-size=8mb --partition-t
 # If you are using a more exotic ESP32 module you can add these parameters to the command above to unlock its full potential.
 # If your module uses octal SPI flash you may need to add the flash-mode option to even make if boot
 # --flash-size=32mb --flash-mode qio  --flash-freq 80mhz
+rustflags = [
+    "-C",
+    "link-arg=-nostartfiles",
+    #"-Z", "stack-protector=all"
+]
 
 [target.riscv32imac-unknown-none-elf]
 runner = "espflash flash --monitor --chip esp32c6 --flash-size=4mb --partition-table=partition_table_c6.csv"
+rustflags = [
+    # Required to obtain backtraces (e.g. when using the "esp-backtrace" crate.)
+    # NOTE: May negatively impact performance of produced code
+    "-C",
+    "force-frame-pointers",
+]
 
 
 [env]
@@ -24,22 +35,6 @@ EKV_MAX_VALUE_SIZE = "10240"
 
 # If your ESP32 does not have an octal PSRAM make sure you comment the following line. If your PSRAM fails to mount this is the first thing to try
 # ESP_HAL_CONFIG_PSRAM_MODE = "octal"
-
-
-# [build]
-# rustflags = [
-#     "-C",
-#     "link-arg=-nostartfiles",
-#     #"-Z", "stack-protector=all"
-# ]
-
-[build]
-rustflags = [
-    # Required to obtain backtraces (e.g. when using the "esp-backtrace" crate.)
-    # NOTE: May negatively impact performance of produced code
-    "-C",
-    "force-frame-pointers",
-]
 
 [unstable]
 build-std = ["alloc", "core"]

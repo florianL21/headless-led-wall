@@ -75,37 +75,7 @@ async fn main(spawner: Spawner) {
     let flash = &*flash;
 
     // LED Panel init
-    #[cfg(feature = "esp32s3")]
-    let (pins, pwm_pin) = (
-        Hub75Pins8 {
-            red1: peripherals.GPIO1.degrade(),   //D0
-            grn1: peripherals.GPIO2.degrade(),   //D1
-            blu1: peripherals.GPIO3.degrade(),   //D2
-            red2: peripherals.GPIO4.degrade(),   //D3
-            grn2: peripherals.GPIO5.degrade(),   //D4
-            blu2: peripherals.GPIO6.degrade(),   //D5
-            clock: peripherals.GPIO44.degrade(), //D7
-            blank: peripherals.GPIO8.degrade(),  //D9
-            latch: peripherals.GPIO43.degrade(), //D6
-        },
-        peripherals.GPIO7.degrade(), //D8
-    );
-
-    #[cfg(feature = "esp32c6")]
-    let (pins, pwm_pin) = (
-        Hub75Pins8 {
-            red1: peripherals.GPIO0.degrade(),   //D0
-            grn1: peripherals.GPIO1.degrade(),   //D1
-            blu1: peripherals.GPIO2.degrade(),   //D2
-            red2: peripherals.GPIO21.degrade(),  //D3
-            grn2: peripherals.GPIO22.degrade(),  //D4
-            blu2: peripherals.GPIO23.degrade(),  //D5
-            clock: peripherals.GPIO17.degrade(), //D7
-            blank: peripherals.GPIO20.degrade(), //D9
-            latch: peripherals.GPIO16.degrade(), //D6
-        },
-        peripherals.GPIO19.degrade(), //D8
-    );
+    let (pins, pwm_pin) = headless_display::gpio_pins!(peripherals);
 
     let hub75_per: Hub75Peripherals<'_> = Hub75Peripherals {
         dma_channel: peripherals.DMA_CH0,

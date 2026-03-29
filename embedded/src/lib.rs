@@ -5,6 +5,8 @@ extern crate alloc;
 
 pub mod flash;
 pub mod panel;
+// #[macro_use]
+pub mod pins;
 pub mod resources;
 pub mod rest;
 pub mod ui;
