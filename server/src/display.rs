@@ -1,6 +1,10 @@
+use core::time::Duration;
+
 use chrono::prelude::*;
 
-use interface::{Alignment, Configuration, Element, FontName, Point, Screen, TextStyle};
+use interface::{
+    Alignment, Configuration, Element, FontName, Overlay, Point, Screen, Size, TextStyle,
+};
 
 use crate::{
     weather::{WeatherData, WeatherForecast},
@@ -15,33 +19,36 @@ pub fn build_display(weather_data: &WeatherData, transport_data: &TransportData)
     let now = Local::now();
     // Render Wiener linien data
     let clock = now.format("%H:%M").to_string();
-    let mut elements = vec![
+    let mut overlay_elements = vec![
+        Element::new_rect(Point::new(0, 0), Size::new(192, 22)).fill_color("000000"),
         Element::new_text("clock", clock, Point::new(2, 13)),
         // Separator between top and bottom section of the display
         Element::new_line(Point::new(0, 19), Point::new(192, 19), "FFFFFF").with_stroke(3),
     ];
     let mut y_offset = 32;
     let y_size = 12;
+    let mut lines_elements = Vec::new();
     // limited to 6 as only 6 fit onto the display
-    for line in transport_data.lines.iter().take(6) {
+    for line in transport_data.lines.iter() {
         let t = format!("{}{}", line.line.clone(), line.direction_letter);
-        elements.push(Element::new_sprite(t, Point::new(2, y_offset - 9)));
+        lines_elements.push(Element::new_sprite(t, Point::new(2, y_offset - 9)));
         // Direction
         let mut dir = line.direction.clone();
         dir.truncate(17);
-        elements.push(Element::new_text("arrival", dir, Point::new(28, y_offset)));
+        lines_elements.push(Element::new_text("arrival", dir, Point::new(28, y_offset)));
         let time = line.times.clone().into_iter().filter(|v| v > &1);
         let times: Vec<String> = time
             .take(2)
             .map(|v| format!("{:>2}", v.to_string()))
             .collect();
         let times = times.join("/");
-        elements.push(
+        lines_elements.push(
             Element::new_text("arrival", times, Point::new(190, y_offset))
                 .with_alignment(Alignment::Right),
         );
         y_offset += y_size;
     }
+    y_offset -= y_size - 4;
 
     // render weather data
     const X_START: i32 = 56;
@@ -70,7 +77,7 @@ pub fn build_display(weather_data: &WeatherData, transport_data: &TransportData)
         .map(|v| v.air_temperature)
         .unwrap_or_default();
 
-    elements.push(Element::new_sprite(
+    overlay_elements.push(Element::new_sprite(
         weather_data.six_hour_forecast.symbol.clone(),
         Point::new(175, 1),
     ));
@@ -79,7 +86,7 @@ pub fn build_display(weather_data: &WeatherData, transport_data: &TransportData)
     for forecast in forecast_iter {
         let y = map(forecast.air_temperature, min, max, Y_MIN, Y_MAX);
         graph_points.push(Point::new(curr_x, y));
-        elements.push(Element::new_line(
+        overlay_elements.push(Element::new_line(
             Point::new(curr_x, 17),
             Point::new(curr_x, 16),
             "404040",
@@ -88,25 +95,34 @@ pub fn build_display(weather_data: &WeatherData, transport_data: &TransportData)
     }
     curr_x -= X_STEP;
 
-    elements.push(Element::new_text(
+    overlay_elements.push(Element::new_text(
         "weather_hl",
         format!("{max:2.1}°"),
         Point::new(curr_x + 2, 7),
     ));
-    elements.push(Element::new_text(
+    overlay_elements.push(Element::new_text(
         "weather_hl",
         format!("{min:2.1}°"),
         Point::new(curr_x + 2, 15),
     ));
 
-    elements.push(Element::new_polyline(graph_points, "FFFFFF"));
+    overlay_elements.push(Element::new_polyline(graph_points, "FFFFFF"));
     // Separator between clock and temp history
-    elements.push(
+    overlay_elements.push(
         Element::new_line(Point::new(X_START, 0), Point::new(X_START, 17), "FFFFFF").with_stroke(1),
     );
 
-    Configuration::new(Screen::new(elements, 192, 96))
-        .add_style("clock", TextStyle::new("FFFFFF", FontName::Font7X13Bold))
-        .add_style("arrival", TextStyle::new("FFFFFF", FontName::Font7X13Bold))
-        .add_style("weather_hl", TextStyle::new("FFFFFF", FontName::Font5X7))
+    Configuration::new(
+        Screen::new(lines_elements, 192, 96)
+            .with_canvas_size(192, y_offset as u32)
+            .with_scroll_animation(interface::ScrollAnimation::DownAndUp {
+                top_delay: Duration::from_secs(2),
+                bottom_delay: Duration::from_secs(1),
+                animation_tick: Duration::from_millis(200),
+            }),
+    )
+    .add_overlay(Overlay::new(overlay_elements))
+    .add_style("clock", TextStyle::new("FFFFFF", FontName::Font7X13Bold))
+    .add_style("arrival", TextStyle::new("FFFFFF", FontName::Font7X13Bold))
+    .add_style("weather_hl", TextStyle::new("FFFFFF", FontName::Font5X7))
 }

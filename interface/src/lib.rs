@@ -486,8 +486,9 @@ impl Screen {
         }
     }
 
-    pub fn with_canvas_size(mut self, animation: ScrollAnimation) -> Self {
-        self.scroll_animation = animation;
+    pub fn with_canvas_size(mut self, width: u32, height: u32) -> Self {
+        self.canvas_size.width = width;
+        self.canvas_size.height = height;
         self
     }
 

@@ -7,6 +7,8 @@ use log::{debug, info};
 use reqwest::Error;
 use serde::Deserialize;
 
+use crate::config::LineConfig;
+
 const WL_MONITOR_BASE: &str = "https://www.wienerlinien.at/ogd_realtime/monitor";
 const INTERRUPTIONS_PARAMS: &str =
     "activateTrafficInfo=stoerunglang&activateTrafficInfo=stoerungkurz";
@@ -100,7 +102,7 @@ fn capitalize(text: String) -> String {
 pub async fn get_transport_data(
     client: &reqwest::Client,
     station_query: &String,
-    line_filter: &HashMap<String, u32>,
+    line_filter: &HashMap<String, LineConfig>,
 ) -> Result<TransportData, Error> {
     let res = client
         .post(format!(
@@ -122,9 +124,11 @@ pub async fn get_transport_data(
                     direction_letter: line.direction.to_uppercase(),
                     times: Vec::new(),
                 };
-                let min_time = line_filter.get(line_name);
+                let line_config = line_filter.get(line_name).cloned().unwrap_or_default();
                 for departure in line.departures.departure {
-                    if departure.departure_time.countdown >= *min_time.unwrap_or(&0) {
+                    if line_config.visible
+                        && departure.departure_time.countdown >= line_config.minutes
+                    {
                         current.times.push(departure.departure_time.countdown);
                     }
                 }

@@ -11,6 +11,26 @@ pub struct DisplayConfig {
     pub ip: Ipv4Addr,
 }
 
+fn default_visible() -> bool {
+    true
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct LineConfig {
+    pub minutes: u32,
+    #[serde(default = "default_visible")]
+    pub visible: bool,
+}
+
+impl Default for LineConfig {
+    fn default() -> Self {
+        LineConfig {
+            minutes: 0,
+            visible: true,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize)]
 pub struct ServerConfig {
     /// WinerLinien API query parameters
@@ -18,7 +38,7 @@ pub struct ServerConfig {
     /// MET institute API query parameters
     pub met: HashMap<String, String>,
     /// Line filter for the transport info from the WL API
-    pub line_filter: HashMap<String, u32>,
+    pub line_filter: HashMap<String, LineConfig>,
     /// Settings for the display
     pub display: DisplayConfig,
 }

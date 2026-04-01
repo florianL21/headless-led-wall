@@ -170,14 +170,18 @@ To summarize, for adding a new datasource you will need to:
 ### Docker
 
 For deploying the server in a more permanent way, a docker container is an easy choice.
-The current Dockerfile embeds the configuration into the container for easy deployment, but with this it means that the docker image will contain some sensitive private information. It is intended to be pushed to a locally running docker registry.
-
-So: !!!DO NOT PUSH IT TO THE DOCKER HUB!!!
 
 For example:
 
 ```bash
 make build DOCKER_TAG=docker.l.at/pub-transp-disp:test
+```
+
+For running it a config file needs to be mounted into the container and passed as a first cli argument.
+For example:
+
+```bash
+docker run -v $PWD/server/config.toml:/data/config.toml docker.l.at/pub-transp-disp:test /data/config.toml server
 ```
 
 ## The sprites

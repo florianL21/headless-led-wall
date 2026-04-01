@@ -11,6 +11,5 @@ FROM alpine:3.21
 RUN apk add --no-cache tzdata
 ENV TZ=Europe/Vienna
 ENV RUST_LOG=info
-COPY server/config.toml /data/config.toml
 COPY --from=builder /usr/local/cargo/bin/headless-display-server /usr/local/bin/server
-ENTRYPOINT ["server", "/data/config.toml"]
+ENTRYPOINT ["server"]
