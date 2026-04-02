@@ -1,7 +1,7 @@
 use embassy_net::Runner;
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, signal::Signal};
 use embassy_time::{Duration, Timer};
-use esp_radio::wifi::{Interface, WifiController};
+use esp_radio::wifi::{Interface, WifiController, WifiError};
 use log::{error, info, warn};
 
 pub enum SystemState {
@@ -9,7 +9,7 @@ pub enum SystemState {
     WIFIWaitForIP,
     WIFIConnected,
     Disconnected,
-    Failed,
+    Failed(WifiError),
     Ready,
 }
 
@@ -36,7 +36,7 @@ pub async fn connection(
             }
             Err(e) => {
                 error!("Failed to connect to wifi: {e:?}");
-                system_state.signal(SystemState::Failed);
+                system_state.signal(SystemState::Failed(e));
             }
         }
         Timer::after(Duration::from_millis(5000)).await

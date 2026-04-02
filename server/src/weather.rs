@@ -287,10 +287,7 @@ pub async fn get_weather_data(
     let weather_data: Response = resp.json().await?;
     let data = condense(weather_data);
     *last_updated = Some(Local::now());
-    info!(
-        "Updated weather data with icon: '{}'",
-        data.six_hour_forecast.symbol
-    );
+    info!("Updated weather data");
     Ok(WeatherUpdateResult::Updated(data, next_check))
 }
 

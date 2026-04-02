@@ -520,6 +520,14 @@ impl Overlay {
     }
 }
 
+impl Default for Overlay {
+    fn default() -> Self {
+        Self {
+            elements: Vec::new(),
+        }
+    }
+}
+
 #[derive(Deserialize, Debug, PartialEq)]
 #[cfg_attr(feature = "server", derive(Serialize, JsonSchema))]
 pub struct Configuration {

@@ -3,12 +3,12 @@ use core::sync::atomic::Ordering;
 use crate::{
     DEBUG_DISPLAY,
     flash::{FlashType, make_buf},
-    panel::{FrameBufferExchange, SYSTEM_IS_UP, TiledFBType},
+    panel::{FrameBufferExchange, PANEL_ON, SYSTEM_IS_UP, TiledFBType},
     resources::{BakedResource, bake, get_dino_sprite, get_no_image_sprite, get_wifi_sprite},
     rest::DISPLAY_CONFIG_SIGNAL,
     wifi::{CurrentStateSignal, SystemState},
 };
-use alloc::{boxed::Box, collections::btree_map::BTreeMap, string::String, vec::Vec};
+use alloc::{boxed::Box, collections::btree_map::BTreeMap, format, string::String, vec::Vec};
 use average::{Estimate, Variance};
 use embassy_executor::task;
 use embassy_time::{Duration, Instant, Timer};
@@ -26,7 +26,7 @@ use embedded_graphics::{primitives::RoundedRectangle, text::Text};
 use embedded_layout::{layout::linear::LinearLayout, prelude::*};
 use esp_hub75::Color;
 use interface::{
-    Element, RectangleCorners,
+    Element, Overlay, RectangleCorners,
     embedded::{BuiltTextStyles, ScrollAnimationInstance},
 };
 use interface::{Resource, embedded::string_to_color};
@@ -260,14 +260,14 @@ fn draw_connect_screen(
     wifi: &mut BakedResource,
     now: Instant,
     needs_render: &mut bool,
-    message: &str,
+    message: String,
 ) {
     if must_redraw(wifi.needs_update(now), needs_render, fb)
         && let Ok(img) = wifi.get_image(now)
     {
         LinearLayout::vertical(
             Chain::new(Image::new(&img, Point::zero())).append(Text::new(
-                message,
+                message.as_str(),
                 Point::zero(),
                 text_style,
             )),
@@ -363,17 +363,32 @@ pub async fn display_task(
     let mut render_time = Variance::new();
     let mut last_log = Instant::now();
 
+    let mut force_refresh = false;
+
     loop {
         if wifi_up.signaled() {
             wifi_state = wifi_up.wait().await;
             needs_render = true;
         }
         let now = Instant::now();
-        let connect_message = match wifi_state {
-            SystemState::WIFIConnecting => Some("Connecting to WIFI"),
-            SystemState::Disconnected => Some("Lost WIFI..."),
-            SystemState::Failed => Some("Failed to connect. Retrying..."),
-            SystemState::WIFIWaitForIP => Some("Waiting for IP"),
+        let connect_message: Option<String> = match wifi_state {
+            SystemState::WIFIConnecting => Some("Connecting to WIFI".into()),
+            SystemState::Disconnected => Some("Lost WIFI...".into()),
+            SystemState::Failed(e) => match e {
+                esp_radio::wifi::WifiError::Unsupported
+                | esp_radio::wifi::WifiError::Failed
+                | esp_radio::wifi::WifiError::InvalidPassword
+                | esp_radio::wifi::WifiError::InvalidArguments
+                | esp_radio::wifi::WifiError::InvalidSsid
+                | esp_radio::wifi::WifiError::OutOfMemory => {
+                    Some(format!("Failed to connect ({:?}).\nRetrying...", e))
+                }
+                esp_radio::wifi::WifiError::Disconnected(di) => {
+                    Some(format!("Lost WIFI ({:?}).\nRetrying...", di.reason))
+                }
+                _ => Some("Failed to connect (Reason unknown).\nRetrying...".into()),
+            },
+            SystemState::WIFIWaitForIP => Some("Waiting for IP".into()),
             SystemState::Ready | SystemState::WIFIConnected => None,
         };
         if let Some(msg) = connect_message {
@@ -396,14 +411,18 @@ pub async fn display_task(
                     sprite_register.clear(&[]);
                 }
             }
-            if new_display_config.is_some() && current_animation.is_finished() {
+            // only change configuration if the scroll animation is finished or the panel is currently off
+            if new_display_config.is_some() && (current_animation.is_finished() || force_refresh) {
                 info!("display new config!");
                 display_config = new_display_config.take();
                 if let Some(ref conf) = display_config {
+                    let default_overlay = Overlay::default();
+                    let overlay = conf.overlay.as_ref().unwrap_or(&default_overlay);
                     let keep: Vec<_> = conf
                         .screen
                         .elements
                         .iter()
+                        .chain(overlay.elements.iter())
                         .filter_map(|e| {
                             if let Element::Sprite { name, .. } = e {
                                 Some(name)
@@ -463,6 +482,8 @@ pub async fn display_task(
             needs_render = false;
             // send the frame buffer to be rendered
             tx.signal(fb);
+            // If panel is off at this point we need to force a config refresh next time we get a new FB
+            force_refresh = !PANEL_ON.load(Ordering::Relaxed);
             // get the next frame buffer
             fb = rx.wait().await;
         } else {

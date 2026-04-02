@@ -6,10 +6,7 @@ use interface::{
     Alignment, Configuration, Element, FontName, Overlay, Point, Screen, Size, TextStyle,
 };
 
-use crate::{
-    weather::{WeatherData, WeatherForecast},
-    wl::TransportData,
-};
+use crate::{weather::WeatherData, wl::TransportData};
 
 fn map(x: f32, in_min: f32, in_max: f32, out_min: i32, out_max: i32) -> i32 {
     ((x - in_min) * (out_max - out_min) as f32 / (in_max - in_min)) as i32 + out_min
@@ -20,6 +17,7 @@ pub fn build_display(weather_data: &WeatherData, transport_data: &TransportData)
     // Render Wiener linien data
     let clock = now.format("%H:%M").to_string();
     let mut overlay_elements = vec![
+        // background of the overlay
         Element::new_rect(Point::new(0, 0), Size::new(192, 22)).fill_color("000000"),
         Element::new_text("clock", clock, Point::new(2, 13)),
         // Separator between top and bottom section of the display
@@ -63,25 +61,33 @@ pub fn build_display(weather_data: &WeatherData, transport_data: &TransportData)
         .hourly_forecast
         .iter()
         .take(NUM_POINTS as usize);
-    let comparator = |a: &&WeatherForecast, b: &&WeatherForecast| {
-        a.air_temperature.partial_cmp(&b.air_temperature).unwrap()
-    };
+    let comparator = |a: &f32, b: &f32| a.partial_cmp(b).unwrap();
     let min = forecast_iter
         .clone()
-        .min_by(comparator)
         .map(|v| v.air_temperature)
+        .min_by(comparator)
         .unwrap_or_default();
     let max = forecast_iter
         .clone()
-        .max_by(comparator)
         .map(|v| v.air_temperature)
+        .max_by(comparator)
         .unwrap_or_default();
 
+    // Weather symbol
     overlay_elements.push(Element::new_sprite(
         weather_data.six_hour_forecast.symbol.clone(),
         Point::new(175, 1),
     ));
+    // Separator between clock and temp history
+    overlay_elements.push(
+        Element::new_line(Point::new(X_START, 0), Point::new(X_START, 17), "FFFFFF").with_stroke(1),
+    );
 
+    let max_precipitation = forecast_iter
+        .clone()
+        .map(|f| f.precipitation_amount)
+        .max_by(comparator)
+        .unwrap_or_default();
     let mut graph_points: Vec<Point> = Vec::new();
     for forecast in forecast_iter {
         let y = map(forecast.air_temperature, min, max, Y_MIN, Y_MAX);
@@ -91,6 +97,15 @@ pub fn build_display(weather_data: &WeatherData, transport_data: &TransportData)
             Point::new(curr_x, 16),
             "404040",
         ));
+
+        let curr_h: i32 = (forecast.precipitation_amount * 5f32 / max_precipitation).round() as i32;
+        if curr_h > 0 {
+            overlay_elements.push(Element::new_line(
+                Point::new(curr_x, 20),
+                Point::new(curr_x, 20 - curr_h),
+                "0000FF",
+            ));
+        }
         curr_x += X_STEP;
     }
     curr_x -= X_STEP;
@@ -107,10 +122,6 @@ pub fn build_display(weather_data: &WeatherData, transport_data: &TransportData)
     ));
 
     overlay_elements.push(Element::new_polyline(graph_points, "FFFFFF"));
-    // Separator between clock and temp history
-    overlay_elements.push(
-        Element::new_line(Point::new(X_START, 0), Point::new(X_START, 17), "FFFFFF").with_stroke(1),
-    );
 
     Configuration::new(
         Screen::new(lines_elements, 192, 96)
