@@ -60,6 +60,8 @@ enum Commands {
         input_file: PathBuf,
         /// Force the panel to be on/off
         on: Option<bool>,
+        /// Force the panel to be a specific brightness
+        brightness: Option<u8>,
     },
 
     /// Upload a sprite to the display server
@@ -165,12 +167,21 @@ impl Cli {
                     to_allocvec(&parsed).expect("Could not convert to postcard format");
                 fs::write(output_file, output).expect("Could not write output file");
             }
-            Commands::PushConfig { input_file, on } => {
+            Commands::PushConfig {
+                input_file,
+                on,
+                brightness,
+            } => {
                 let f = File::open(input_file).expect("Could not open file");
                 let reader = BufReader::new(f);
                 let mut parsed: Configuration =
                     serde_json::from_reader(reader).expect("Could not parse json");
-                parsed.panel.on = on;
+                if let Some(on_state) = on {
+                    parsed.panel.on = Some(on_state);
+                }
+                if let Some(brightness) = brightness {
+                    parsed.panel.brightness = Some(brightness);
+                }
                 let buf = postcard::to_allocvec(&parsed)
                     .expect("Could not serialize configuration to postcard format");
                 let client = reqwest::Client::new();

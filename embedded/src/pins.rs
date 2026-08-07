@@ -19,6 +19,28 @@ macro_rules! gpio_pins {
     };
 }
 
+// Alternative pin config for the 3x3 panel
+// #[macro_export]
+// #[cfg(feature = "esp32s3")]
+// macro_rules! gpio_pins {
+//     ($per:ident) => {
+//         (
+//             Hub75Pins8 {
+//                 red1: $per.GPIO42.degrade(),
+//                 grn1: $per.GPIO41.degrade(),
+//                 blu1: $per.GPIO40.degrade(),
+//                 red2: $per.GPIO38.degrade(),
+//                 grn2: $per.GPIO39.degrade(),
+//                 blu2: $per.GPIO12.degrade(),
+//                 clock: $per.GPIO2.degrade(),
+//                 blank: $per.GPIO14.degrade(),
+//                 latch: $per.GPIO47.degrade(),
+//             },
+//             $per.GPIO45.degrade(),
+//         )
+//     };
+// }
+
 #[macro_export]
 #[cfg(feature = "esp32c6")]
 macro_rules! gpio_pins {
