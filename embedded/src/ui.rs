@@ -3,15 +3,14 @@ use core::sync::atomic::Ordering;
 use crate::{
     DEBUG_DISPLAY,
     flash::{FlashType, make_buf},
-    panel::{FrameBufferExchange, PANEL_ON, SYSTEM_IS_UP, TiledFBType},
+    panel::{DisplayFB, PANEL_ON, SYSTEM_IS_UP},
     resources::{BakedResource, bake, get_dino_sprite, get_no_image_sprite, get_wifi_sprite},
     rest::DISPLAY_CONFIG_SIGNAL,
     wifi::{CurrentStateSignal, SystemState},
 };
 use alloc::{boxed::Box, collections::btree_map::BTreeMap, format, string::String, vec::Vec};
 use average::{Estimate, Variance};
-use embassy_executor::task;
-use embassy_time::{Duration, Instant, Timer};
+use embassy_time::{Duration, Instant};
 use embedded_graphics::Drawable;
 use embedded_graphics::{geometry::Point, primitives::Line};
 use embedded_graphics::{image::Image, primitives::PrimitiveStyleBuilder};
@@ -27,7 +26,7 @@ use embedded_layout::{layout::linear::LinearLayout, prelude::*};
 use esp_hub75::Color;
 use interface::{
     Element, Overlay, RectangleCorners,
-    embedded::{BuiltTextStyles, ScrollAnimationInstance},
+    embedded::{BuiltTextStyles, CheckedScreenConfig, ScrollAnimationInstance},
 };
 use interface::{Resource, embedded::string_to_color};
 use log::{error, info};
@@ -129,7 +128,7 @@ fn make_primitive_style(
 }
 
 async fn render_config(
-    fb: &mut TiledFBType,
+    fb: &mut DisplayFB,
     elements: &Vec<Element>,
     styles: &BuiltTextStyles,
     sprite_register: &mut SpriteRegister,
@@ -243,7 +242,7 @@ async fn render_config(
     }
 }
 
-fn must_redraw(cond: bool, is_dirty: &mut bool, fb: &mut TiledFBType) -> bool {
+fn must_redraw(cond: bool, is_dirty: &mut bool, fb: &mut DisplayFB) -> bool {
     if *is_dirty || cond {
         fb.clear(Color::BLACK).ok();
         *is_dirty = true;
@@ -254,7 +253,7 @@ fn must_redraw(cond: bool, is_dirty: &mut bool, fb: &mut TiledFBType) -> bool {
 }
 
 fn draw_connect_screen(
-    fb: &mut TiledFBType,
+    fb: &mut DisplayFB,
     text_style: MonoTextStyle<'_, Color>,
     display_area: Rectangle,
     wifi: &mut BakedResource,
@@ -329,49 +328,60 @@ impl ScrollAnimationState {
     }
 }
 
-#[task]
-pub async fn display_task(
-    rx: &'static FrameBufferExchange,
-    tx: &'static FrameBufferExchange,
-    mut fb: &'static mut TiledFBType,
+pub struct Renderer {
+    wifi: BakedResource,
+    dino: BakedResource,
+    err_img: BakedResource,
+    wifi_state: SystemState,
+    wifi_text_style: MonoTextStyle<'static, Rgb888>,
+    display_area: Rectangle,
+    new_display_config: Option<CheckedScreenConfig>,
+    display_config: Option<CheckedScreenConfig>,
+    sprite_register: SpriteRegister,
+    needs_render: bool,
+    current_animation: ScrollAnimationState,
+    render_time: Variance,
+    last_log: Instant,
+    force_refresh: bool,
     wifi_up: &'static CurrentStateSignal,
-    flash: &'static FlashType,
-) {
-    info!("display_task: starting!");
+}
 
-    let mut wifi = get_wifi_sprite();
-    let mut dino = get_dino_sprite();
-    let mut err_img = get_no_image_sprite();
+impl Renderer {
+    pub fn new(
+        wifi_up: &'static CurrentStateSignal,
+        flash: &'static FlashType,
+        display_area: Rectangle,
+    ) -> Self {
+        Self {
+            wifi: get_wifi_sprite(),
+            dino: get_dino_sprite(),
+            err_img: get_no_image_sprite(),
+            wifi_state: SystemState::WIFIConnecting,
+            wifi_text_style: MonoTextStyleBuilder::new()
+                .font(&FONT_5X7)
+                .text_color(Rgb888::YELLOW)
+                .build(),
+            display_area,
+            new_display_config: None,
+            display_config: None,
+            sprite_register: SpriteRegister::new(flash),
+            needs_render: true,
+            current_animation: ScrollAnimationState::new(ScrollAnimationInstance::still()),
+            render_time: Variance::new(),
+            last_log: Instant::now(),
+            force_refresh: false,
+            wifi_up,
+        }
+    }
 
-    let mut wifi_state = SystemState::WIFIConnecting;
-
-    let wifi_text_style = MonoTextStyleBuilder::new()
-        .font(&FONT_5X7)
-        .text_color(Rgb888::YELLOW)
-        .build();
-
-    let display_area = fb.bounding_box();
-
-    let mut new_display_config = None;
-
-    let mut display_config = None;
-    let mut sprite_register = SpriteRegister::new(flash);
-    let mut needs_render = true;
-
-    let mut current_animation = ScrollAnimationState::new(ScrollAnimationInstance::still());
-
-    let mut render_time = Variance::new();
-    let mut last_log = Instant::now();
-
-    let mut force_refresh = false;
-
-    loop {
-        if wifi_up.signaled() {
-            wifi_state = wifi_up.wait().await;
-            needs_render = true;
+    pub async fn render(&mut self, fb: &mut DisplayFB) -> bool {
+        let mut has_rendered = false;
+        if self.wifi_up.signaled() {
+            self.wifi_state = self.wifi_up.wait().await;
+            self.needs_render = true;
         }
         let now = Instant::now();
-        let connect_message: Option<String> = match wifi_state {
+        let connect_message: Option<String> = match self.wifi_state {
             SystemState::WIFIConnecting => Some("Connecting to WIFI".into()),
             SystemState::Disconnected => Some("Lost WIFI...".into()),
             SystemState::Failed(e) => match e {
@@ -395,27 +405,29 @@ pub async fn display_task(
             SYSTEM_IS_UP.store(false, Ordering::Relaxed);
             draw_connect_screen(
                 fb,
-                wifi_text_style,
-                display_area,
-                &mut wifi,
+                self.wifi_text_style,
+                self.display_area,
+                &mut self.wifi,
                 now,
-                &mut needs_render,
+                &mut self.needs_render,
                 msg,
             );
         } else {
             SYSTEM_IS_UP.store(true, Ordering::Relaxed);
             if let Some(conf) = DISPLAY_CONFIG_SIGNAL.try_take() {
                 info!("got new config!");
-                new_display_config = conf;
-                if new_display_config.is_none() {
-                    sprite_register.clear(&[]);
+                self.new_display_config = conf;
+                if self.new_display_config.is_none() {
+                    self.sprite_register.clear(&[]);
                 }
             }
             // only change configuration if the scroll animation is finished or the panel is currently off
-            if new_display_config.is_some() && (current_animation.is_finished() || force_refresh) {
+            if self.new_display_config.is_some()
+                && (self.current_animation.is_finished() || self.force_refresh)
+            {
                 info!("display new config!");
-                display_config = new_display_config.take();
-                if let Some(ref conf) = display_config {
+                self.display_config = self.new_display_config.take();
+                if let Some(ref conf) = self.display_config {
                     let default_overlay = Overlay::default();
                     let overlay = conf.overlay.as_ref().unwrap_or(&default_overlay);
                     let keep: Vec<_> = conf
@@ -431,30 +443,30 @@ pub async fn display_task(
                             }
                         })
                         .collect();
-                    sprite_register.clear(keep.as_slice());
-                    sprite_register.prepare(keep.as_slice()).await;
-                    current_animation =
+                    self.sprite_register.clear(keep.as_slice());
+                    self.sprite_register.prepare(keep.as_slice()).await;
+                    self.current_animation =
                         ScrollAnimationState::new(conf.screen.scroll_animation.clone().instance(
                             conf.screen.screen_size.clone(),
                             conf.screen.canvas_size.clone(),
                         ));
-                    needs_render = true;
+                    self.needs_render = true;
                 }
             }
-            if let Some(ref mut conf) = display_config {
+            if let Some(ref mut conf) = self.display_config {
                 if must_redraw(
-                    sprite_register.needs_redraw(now) || current_animation.needs_update(),
-                    &mut needs_render,
+                    self.sprite_register.needs_redraw(now) || self.current_animation.needs_update(),
+                    &mut self.needs_render,
                     fb,
                 ) {
                     render_config(
                         fb,
                         &conf.screen.elements,
                         &conf.styles,
-                        &mut sprite_register,
-                        &mut err_img,
+                        &mut self.sprite_register,
+                        &mut self.err_img,
                         now,
-                        current_animation.current_offset(),
+                        self.current_animation.current_offset(),
                     )
                     .await;
                     if let Some(overlay) = &conf.overlay {
@@ -462,43 +474,38 @@ pub async fn display_task(
                             fb,
                             &overlay.elements,
                             &conf.styles,
-                            &mut sprite_register,
-                            &mut err_img,
+                            &mut self.sprite_register,
+                            &mut self.err_img,
                             now,
                             Point::zero(),
                         )
                         .await;
                     }
                 }
-            } else if must_redraw(dino.needs_update(now), &mut needs_render, fb)
-                && let Ok(img) = dino.get_image(now)
+            } else if must_redraw(self.dino.needs_update(now), &mut self.needs_render, fb)
+                && let Ok(img) = self.dino.get_image(now)
             {
                 Image::new(&img, Point::zero()).draw(fb).ok();
             }
         }
-        render_time.add(now.elapsed().as_micros() as f64);
+        self.render_time.add(now.elapsed().as_micros() as f64);
         // only exchange the framebuffers if there is something new to render
-        if needs_render {
-            needs_render = false;
-            // send the frame buffer to be rendered
-            tx.signal(fb);
+        if self.needs_render {
+            has_rendered = true;
+            self.needs_render = false;
             // If panel is off at this point we need to force a config refresh next time we get a new FB
-            force_refresh = !PANEL_ON.load(Ordering::Relaxed);
-            // get the next frame buffer
-            fb = rx.wait().await;
-        } else {
-            // give other tasks some time to run as well
-            Timer::after(Duration::from_millis(30)).await;
+            self.force_refresh = !PANEL_ON.load(Ordering::Relaxed);
         }
 
-        if DEBUG_DISPLAY && last_log.elapsed() > LOG_INTERVAL {
+        if DEBUG_DISPLAY && self.last_log.elapsed() > LOG_INTERVAL {
             info!(
                 "render time: {:.2} us ± {:.2}",
-                render_time.mean(),
-                render_time.error()
+                self.render_time.mean(),
+                self.render_time.error()
             );
-            render_time = Variance::new();
-            last_log = Instant::now();
+            self.render_time = Variance::new();
+            self.last_log = Instant::now();
         }
+        has_rendered
     }
 }

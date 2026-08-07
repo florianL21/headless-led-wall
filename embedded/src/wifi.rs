@@ -4,6 +4,8 @@ use embassy_time::{Duration, Timer};
 use esp_radio::wifi::{Interface, WifiController, WifiError};
 use log::{error, info, warn};
 
+pub static CURRENT_STATE: CurrentStateSignal = CurrentStateSignal::new();
+
 pub enum SystemState {
     WIFIConnecting,
     WIFIWaitForIP,
@@ -44,6 +46,6 @@ pub async fn connection(
 }
 
 #[embassy_executor::task]
-pub async fn net_task(mut runner: Runner<'static, Interface<'static>>) {
+pub async fn net_task(mut runner: Runner<'static, Interface>) {
     runner.run().await
 }

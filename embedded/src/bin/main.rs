@@ -24,10 +24,10 @@ use headless_display::CONFIG;
 use headless_display::flash::{FlashType, flash_init, flash_task};
 use headless_display::panel::init_led_panel;
 use headless_display::rest::{AppProps, WEB_TASK_POOL_SIZE, web_task};
-use headless_display::ui::display_task;
+use headless_display::wifi::CURRENT_STATE;
 use headless_display::{
-    panel::{FrameBufferExchange, Hub75Peripherals, hub75_task},
-    wifi::{CurrentStateSignal, SystemState, connection, net_task},
+    panel::{Hub75Peripherals, hub75_task},
+    wifi::{SystemState, connection, net_task},
 };
 use log::info;
 use picoserve::{AppBuilder, AppRouter};
@@ -64,8 +64,6 @@ async fn main(spawner: Spawner) {
 
     info!("Embassy initialized!");
 
-    static CURRENT_STATE: CurrentStateSignal = CurrentStateSignal::new();
-
     // Initialize flash storage
     let flash = flash_init(peripherals.FLASH);
     static FLASH: StaticCell<FlashType> = StaticCell::new();
@@ -85,11 +83,7 @@ async fn main(spawner: Spawner) {
         pwm_pin,
         ledc: peripherals.LEDC,
     };
-    let (fb0, fb1, panel_freq) = init_led_panel::<false>();
-
-    info!("init framebuffer exchange");
-    static TX: FrameBufferExchange = FrameBufferExchange::new();
-    static RX: FrameBufferExchange = FrameBufferExchange::new();
+    let (fbs, panel_freq) = init_led_panel::<false>();
 
     cfg_if::cfg_if! {
         if #[cfg(feature = "esp32c6")] {
@@ -102,16 +96,15 @@ async fn main(spawner: Spawner) {
             let high_prio_spawner = executor.start(Priority::max());
             high_prio_spawner.spawn(hub75_task(
                 hub75_per,
-                &RX,
-                &TX,
-                fb1,
+                fbs,
                 panel_freq,
                 TARGET_PANEL_FRAME_RATE,
+                flash
             ).unwrap());
         } else if #[cfg(feature = "esp32s3")] {
             use esp_rtos::embassy::Executor;
 
-            static APP_CORE_STACK: StaticCell<Stack<8192>> = StaticCell::new();
+            static APP_CORE_STACK: StaticCell<Stack<16384>> = StaticCell::new();
             let app_core_stack = APP_CORE_STACK.init(Stack::new());
             esp_rtos::start_second_core(
                 peripherals.CPU_CTRL,
@@ -123,11 +116,10 @@ async fn main(spawner: Spawner) {
                     executor.run(|spawner| {
                         spawner.spawn(hub75_task(
                         hub75_per,
-                        &RX,
-                        &TX,
-                        fb1,
+                        fbs,
                         panel_freq,
                         TARGET_PANEL_FRAME_RATE,
+                        flash
                     ).unwrap());
                     });
                 },
@@ -136,7 +128,6 @@ async fn main(spawner: Spawner) {
     }
 
     spawner.spawn(flash_task(flash).unwrap());
-    spawner.spawn(display_task(&TX, &RX, fb0, &CURRENT_STATE, flash).unwrap());
 
     let stats = esp_alloc::HEAP.stats();
     info!("After panel alloc: {stats}");
@@ -151,14 +142,15 @@ async fn main(spawner: Spawner) {
     );
 
     info!("Starting wifi");
-    let (controller, interfaces) = esp_radio::wifi::new(
+    let wifi_interface = esp_radio::wifi::Interface::station();
+    let controller = esp_radio::wifi::WifiController::new(
         peripherals.WIFI,
         ControllerConfig::default().with_initial_config(station_config),
     )
     .unwrap();
     info!("Wifi configured and started!");
 
-    let wifi_interface = interfaces.station;
+    // let wifi_interface = interfaces.station;
 
     let config = embassy_net::Config::dhcpv4(Default::default());
 

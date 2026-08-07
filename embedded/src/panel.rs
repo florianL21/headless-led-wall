@@ -1,20 +1,23 @@
+use crate::flash::FlashType;
+use crate::ui::Renderer;
+use crate::wifi::CURRENT_STATE;
 use crate::{CONFIG, DEBUG_DISPLAY};
+use average::{Estimate, Variance};
 use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use embassy_executor::task;
-use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-use embassy_sync::signal::Signal;
 use embassy_time::{Duration, Instant, Ticker};
+use embedded_graphics::pixelcolor::Rgb888;
+use embedded_graphics::prelude::{Dimensions, DrawTarget, RgbColor};
 use esp_hal::gpio::{AnyPin, Level, Output, OutputConfig};
 use esp_hal::ledc::channel::ChannelIFace;
 use esp_hal::ledc::timer::TimerIFace;
 use esp_hal::ledc::{LSGlobalClkSource, Ledc, LowSpeed, timer};
-
-use average::{Estimate, Variance};
 use esp_hal::time::Rate;
-use esp_hub75::framebuffer::{compute_frame_count, compute_rows, latched::DmaFrameBuffer};
+use esp_hub75::framebuffer::bitplane::latched::DmaFrameBuffer;
+use esp_hub75::framebuffer::tiling::ChainTopRightDown;
+use esp_hub75::framebuffer::tiling::RemappedFrameBuffer;
 use esp_hub75::{Hub75, Hub75Pins8};
-use hub75_framebuffer::tiling::{ChainTopRightDown, TiledFrameBuffer, compute_tiled_cols};
-use log::{error, info};
+use log::info;
 use static_cell::StaticCell;
 
 #[cfg(feature = "esp32s3")]
@@ -24,17 +27,16 @@ use esp_hal::peripherals::LCD_CAM as FB_PER;
 use esp_hal::peripherals::PARL_IO as FB_PER;
 
 // Constants to tune for best panel performance
-const BITS: u8 = CONFIG.panel.color_depth as u8;
+const PLANES: usize = CONFIG.panel.color_depth as usize;
 const PANEL_FREQ_WITH_PSRAM: Rate = Rate::from_mhz(2); // Upper limit is about 3Mhz in the best cases when using PSRAM.
 const PANEL_FREQ_STATIC: Rate = Rate::from_mhz(20); // caps out at 30Mhz
 
 const TILED_COLS: usize = CONFIG.panel.num_panels_width as usize;
 const TILED_ROWS: usize = CONFIG.panel.num_panels_height as usize;
-const ROWS: usize = CONFIG.panel.panel_height as usize;
+const PANEL_ROWS: usize = CONFIG.panel.panel_height as usize;
 const PANEL_COLS: usize = CONFIG.panel.panel_width as usize;
-const FB_COLS: usize = compute_tiled_cols(PANEL_COLS, TILED_ROWS, TILED_COLS);
-const NROWS: usize = compute_rows(ROWS);
-const FRAME_COUNT: usize = compute_frame_count(BITS);
+const FB_COLS: usize = PANEL_COLS * TILED_ROWS * TILED_COLS;
+const NROWS: usize = PANEL_ROWS / 2;
 const LOG_INTERVAL: Duration = Duration::from_secs(5);
 const FPS_INTERVAL: Duration = Duration::from_secs(1);
 
@@ -42,20 +44,9 @@ pub static PANEL_ON: AtomicBool = AtomicBool::new(true);
 pub static SYSTEM_IS_UP: AtomicBool = AtomicBool::new(false);
 pub static BRIGHTNESS: AtomicU8 = AtomicU8::new(CONFIG.panel.initial_brightness as u8);
 
-type FBType = DmaFrameBuffer<ROWS, FB_COLS, NROWS, BITS, FRAME_COUNT>;
-pub type TiledFBType = TiledFrameBuffer<
-    FBType,
-    ChainTopRightDown<ROWS, PANEL_COLS, TILED_ROWS, TILED_COLS>,
-    ROWS,
-    PANEL_COLS,
-    NROWS,
-    BITS,
-    FRAME_COUNT,
-    TILED_ROWS,
-    TILED_COLS,
-    FB_COLS,
->;
-pub type FrameBufferExchange = Signal<CriticalSectionRawMutex, &'static mut TiledFBType>;
+type InnerFB = DmaFrameBuffer<NROWS, FB_COLS, PLANES>;
+type Remapper = ChainTopRightDown<PANEL_ROWS, PANEL_COLS, TILED_ROWS, TILED_COLS>;
+pub type DisplayFB = RemappedFrameBuffer<InnerFB, Remapper>;
 
 pub struct Hub75Peripherals<'d> {
     pub interface: FB_PER<'d>,
@@ -65,7 +56,7 @@ pub struct Hub75Peripherals<'d> {
     pub ledc: esp_hal::peripherals::LEDC<'d>,
 }
 
-fn init_fbs_heap() -> (&'static mut TiledFBType, &'static mut TiledFBType) {
+fn init_fbs_heap() -> (&'static mut DisplayFB, &'static mut DisplayFB) {
     // If the framebuffer is too large to fit in ram, we can allocate it on the
     // heap in PSRAM instead.
     // Allocate the framebuffer to PSRAM without ever putting it on the stack first
@@ -73,14 +64,14 @@ fn init_fbs_heap() -> (&'static mut TiledFBType, &'static mut TiledFBType) {
     use alloc::boxed::Box;
     use core::alloc::Layout;
 
-    let layout = Layout::new::<TiledFBType>();
+    let layout = Layout::new::<DisplayFB>();
 
     let fb0 = unsafe {
-        let ptr = alloc(layout) as *mut TiledFBType;
+        let ptr = alloc(layout) as *mut DisplayFB;
         Box::from_raw(ptr)
     };
     let fb1 = unsafe {
-        let ptr = alloc(layout) as *mut TiledFBType;
+        let ptr = alloc(layout) as *mut DisplayFB;
         Box::from_raw(ptr)
     };
 
@@ -89,54 +80,59 @@ fn init_fbs_heap() -> (&'static mut TiledFBType, &'static mut TiledFBType) {
     (fb0, fb1)
 }
 
-fn init_fbs_stack() -> (&'static mut TiledFBType, &'static mut TiledFBType) {
+fn init_fbs_stack() -> (&'static mut DisplayFB, &'static mut DisplayFB) {
     // // Allocate the framebuffers in static memory. This assumes that they fit into ram.
-    static FB0: StaticCell<TiledFBType> = StaticCell::new();
-    static FB1: StaticCell<TiledFBType> = StaticCell::new();
-    let fb0 = FB0.init(TiledFrameBuffer::new());
-    let fb1 = FB1.init(TiledFrameBuffer::new());
+    static FB0: StaticCell<DisplayFB> = StaticCell::new();
+    static FB1: StaticCell<DisplayFB> = StaticCell::new();
+    let fb0 = FB0.init(DisplayFB::new());
+    let fb1 = FB1.init(DisplayFB::new());
     (fb0, fb1)
 }
 
 pub fn init_led_panel<const USE_HEAP: bool>()
--> (&'static mut TiledFBType, &'static mut TiledFBType, Rate) {
-    let (fb0, fb1) = if USE_HEAP {
+-> ((&'static mut DisplayFB, &'static mut DisplayFB), Rate) {
+    let fbs = if USE_HEAP {
         init_fbs_heap()
     } else {
         init_fbs_stack()
     };
-
     let panel_freq = if USE_HEAP {
         PANEL_FREQ_WITH_PSRAM
     } else {
         PANEL_FREQ_STATIC
     };
 
-    (fb0, fb1, panel_freq)
+    (fbs, panel_freq)
 }
 
 #[task]
 pub async fn hub75_task(
     peripherals: Hub75Peripherals<'static>,
-    rx: &'static FrameBufferExchange,
-    tx: &'static FrameBufferExchange,
-    fb: &'static mut TiledFBType,
+    fbs: (&'static mut DisplayFB, &'static mut DisplayFB),
     panel_freq: Rate,
     target_frame_rate: u32,
+    flash: &'static FlashType,
 ) {
     info!("hub75_task: starting!");
     let mut brightness = BRIGHTNESS.load(Ordering::Relaxed);
 
-    let (_, tx_descriptors) = esp_hal::dma_descriptors!(0, FBType::dma_buffer_size_bytes());
+    let tx_descriptors = esp_hub75::hub75_dma_descriptors!(InnerFB);
 
-    let mut hub75 = Hub75::new_async(
+    let (fb0, fb1) = fbs;
+    let bounding_box = fb0.bounding_box();
+    let mut renderer = Renderer::new(&CURRENT_STATE, flash, bounding_box);
+
+    let hub75 = Hub75::new_async(
         peripherals.interface,
         peripherals.pins,
         peripherals.dma_channel,
         tx_descriptors,
         panel_freq,
+        &*fb0,
     )
     .expect("failed to create Hub75!");
+
+    let mut fb = fb1;
 
     let pwm_pin = Output::new(peripherals.pwm_pin, Level::High, OutputConfig::default());
 
@@ -162,8 +158,6 @@ pub async fn hub75_task(
 
     let mut count = 0u32;
     let mut start = Instant::now();
-
-    let mut fb = fb;
 
     let mut ticker = Ticker::every(Duration::from_millis(
         (1000f32 / target_frame_rate as f32) as u64,
@@ -206,23 +200,13 @@ pub async fn hub75_task(
             // Only swap the frame buffer if the display is active.
             // If not there is no need to constantly rerender the UI which
             // should stop automatically if we don't send it a new framebuffer to render to
-            if rx.signaled() {
-                // if there is a new buffer available, get it and send the old one
-                let new_fb = rx.wait().await;
-                tx.signal(fb);
-                fb = new_fb;
-            }
-            let mut xfer = hub75
-                .render(fb)
-                .map_err(|(e, _hub75)| e)
-                .expect("failed to start render!");
-            if let Err(e) = xfer.wait_for_done().await {
-                error!("rendering wait_for_done failed: {e:?}");
-            }
-            let (result, new_hub75) = xfer.wait();
-            hub75 = new_hub75;
-            if let Err(e) = result {
-                error!("transfer failed: {e:?}");
+            if renderer.render(fb).await {
+                // only swap the framebuffers if there was actually something new rendered
+                let mut xfer = hub75.swap(fb);
+                xfer.wait_for_done().await;
+                fb = xfer.wait().expect("DMA transfer failed");
+                // clear the old framebuffer for the next time we render to it
+                fb.clear(Rgb888::BLACK).ok();
             }
         }
 
