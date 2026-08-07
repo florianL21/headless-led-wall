@@ -443,13 +443,16 @@ impl Renderer {
                             }
                         })
                         .collect();
+                    info!("Recreating sprite register");
                     self.sprite_register.clear(keep.as_slice());
                     self.sprite_register.prepare(keep.as_slice()).await;
+                    info!("Setting animation");
                     self.current_animation =
                         ScrollAnimationState::new(conf.screen.scroll_animation.clone().instance(
                             conf.screen.screen_size.clone(),
                             conf.screen.canvas_size.clone(),
                         ));
+                    info!("Next config is prepared");
                     self.needs_render = true;
                 }
             }

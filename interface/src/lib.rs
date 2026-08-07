@@ -530,6 +530,15 @@ impl Default for Overlay {
 
 #[derive(Deserialize, Debug, PartialEq)]
 #[cfg_attr(feature = "server", derive(Serialize, JsonSchema))]
+pub struct Panel {
+    /// Force a particular panel state
+    pub on: Option<bool>,
+    /// Force a particular panel brightness
+    pub brightness: Option<u8>,
+}
+
+#[derive(Deserialize, Debug, PartialEq)]
+#[cfg_attr(feature = "server", derive(Serialize, JsonSchema))]
 pub struct Configuration {
     /// Array of screens to display. For now only the first screen is actually read.
     pub screen: Screen,
@@ -537,6 +546,8 @@ pub struct Configuration {
     pub overlay: Option<Overlay>,
     /// Map of text styles
     pub text_styles: GlobalStylesType,
+    /// panel configuration options
+    pub panel: Panel,
 }
 
 impl Configuration {
@@ -545,6 +556,10 @@ impl Configuration {
             screen,
             text_styles: GlobalStylesType::new(),
             overlay: None,
+            panel: Panel {
+                brightness: None,
+                on: None,
+            },
         }
     }
 

@@ -2,7 +2,7 @@ use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 use ekv::flash::{self, PageID};
-use ekv::{config, Database, ReadError};
+use ekv::{Database, ReadError, config};
 use embassy_executor::task;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
@@ -112,7 +112,8 @@ pub fn flash_init(peripheral: FLASH<'static>) -> FlashType {
 
     static PT: StaticCell<[u8; partitions::PARTITION_TABLE_MAX_LEN]> = StaticCell::new();
     let pt_mem = PT.init([0u8; partitions::PARTITION_TABLE_MAX_LEN]);
-    let pt = partitions::read_partition_table(flash, pt_mem).unwrap();
+    let pt =
+        partitions::read_partition_table(flash, pt_mem).expect("Failed to read partition table");
 
     static PART: StaticCell<partitions::PartitionEntry> = StaticCell::new();
     let fat = PART.init(
@@ -139,7 +140,7 @@ pub fn flash_init(peripheral: FLASH<'static>) -> FlashType {
 pub async fn flash_task(flash: &'static FlashType) {
     if flash.mount().await.is_err() {
         info!("Flash mount failed. Formatting...");
-        flash.format().await.unwrap();
+        flash.format().await.expect("Formatting flash failed");
     }
     info!("Flash task is starting");
     loop {

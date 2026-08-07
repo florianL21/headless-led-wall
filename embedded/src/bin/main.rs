@@ -100,7 +100,7 @@ async fn main(spawner: Spawner) {
                 panel_freq,
                 TARGET_PANEL_FRAME_RATE,
                 flash
-            ).unwrap());
+            ).expect("Failed to instantiate hub75_task task"));
         } else if #[cfg(feature = "esp32s3")] {
             use esp_rtos::embassy::Executor;
 
@@ -120,14 +120,14 @@ async fn main(spawner: Spawner) {
                         panel_freq,
                         TARGET_PANEL_FRAME_RATE,
                         flash
-                    ).unwrap());
+                    ).expect("Failed to instantiate hub75_task task"));
                     });
                 },
             );
         }
     }
 
-    spawner.spawn(flash_task(flash).unwrap());
+    spawner.spawn(flash_task(flash).expect("Failed to instantiate flash task"));
 
     let stats = esp_alloc::HEAP.stats();
     info!("After panel alloc: {stats}");
@@ -147,7 +147,7 @@ async fn main(spawner: Spawner) {
         peripherals.WIFI,
         ControllerConfig::default().with_initial_config(station_config),
     )
-    .unwrap();
+    .expect("Failed to create wifi controller");
     info!("Wifi configured and started!");
 
     // let wifi_interface = interfaces.station;
@@ -166,8 +166,10 @@ async fn main(spawner: Spawner) {
         seed,
     );
 
-    spawner.spawn(connection(controller, &CURRENT_STATE).unwrap());
-    spawner.spawn(net_task(runner).unwrap());
+    spawner.spawn(
+        connection(controller, &CURRENT_STATE).expect("Failed to instantiate connection task"),
+    );
+    spawner.spawn(net_task(runner).expect("Failed to instantiate net task"));
 
     // TODO: handle system start properly. The wifi logo flashes briefly because the system is set to ready from 2 locations
     CURRENT_STATE.signal(SystemState::WIFIConnecting);
@@ -194,7 +196,7 @@ async fn main(spawner: Spawner) {
     let app = APP.init(AppProps.build_app());
 
     for id in 0..WEB_TASK_POOL_SIZE {
-        spawner.spawn(web_task(id, stack, app).unwrap());
+        spawner.spawn(web_task(id, stack, app).expect("Failed to instantiate web task"));
     }
 
     // loop {

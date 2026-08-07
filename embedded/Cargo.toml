@@ -61,7 +61,7 @@ embassy-sync = "0.8.0"
 heapless = "0.9.3"
 tinyqoi = "0.2.0"
 embedded-layout = "0.4.2"
-picoserve = { version = "0.18.0", features = ["alloc", "embassy", "log"] }
+picoserve = { version = "0.19.0", features = ["alloc", "embassy", "log"] }
 serde = { version = "1.0.229", default-features = false, features = [
     "alloc",
     "derive",
@@ -94,6 +94,7 @@ esp32s3 = [
     "esp-hub75/esp32s3",
     "esp-hub75/full-chain-dma",
     "esp-hub75/circular-dma",
+    "esp-hub75/iram",
     "esp-radio/esp32s3",
     "esp-rtos/esp32s3",
     "esp-println/esp32s3",

@@ -14,6 +14,10 @@
         }
       ]
     },
+    "panel": {
+      "description": "panel configuration options",
+      "$ref": "#/$defs/Panel"
+    },
     "screen": {
       "description": "Array of screens to display. For now only the first screen is actually read.",
       "$ref": "#/$defs/Screen"
@@ -28,7 +32,8 @@
   },
   "required": [
     "screen",
-    "text_styles"
+    "text_styles",
+    "panel"
   ],
   "$defs": {
     "Alignment": {
@@ -336,6 +341,28 @@
       "required": [
         "elements"
       ]
+    },
+    "Panel": {
+      "type": "object",
+      "properties": {
+        "brightness": {
+          "description": "Force a particular panel brightness",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "on": {
+          "description": "Force a particular panel state",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      }
     },
     "Point": {
       "type": "object",

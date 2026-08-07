@@ -184,5 +184,9 @@
             "font": "Font6X10",
             "text_color": "FFFFFF"
         }
+    },
+    "panel": {
+      "on": null,
+      "brightness": null
     }
 }

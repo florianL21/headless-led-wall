@@ -1,27 +1,27 @@
 mod ota;
 
 use crate::{
-    panel::{BRIGHTNESS, PANEL_ON},
     CONFIG,
+    panel::{BRIGHTNESS, PANEL_ON},
 };
 use alloc::{format, string::String, vec::Vec};
 use core::sync::atomic::Ordering;
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, signal::Signal};
 use interface::{
-    embedded::{CheckedScreenConfig, ScreenBuildError},
     Configuration, Resource,
+    embedded::{CheckedScreenConfig, ScreenBuildError},
 };
 use log::{error, info};
 use picoserve::{
+    AppBuilder, AppRouter,
     extract::{FromRequest, Query},
     io::Read,
     response::{self, ErrorWithStatusCode},
     routing::{get, get_service, post},
-    AppBuilder, AppRouter,
 };
 use postcard::from_bytes;
 
-use crate::flash::{FlashOperation, FlashOperationResult, FLASH_OPERATION, FLASH_OPERATION_RESULT};
+use crate::flash::{FLASH_OPERATION, FLASH_OPERATION_RESULT, FlashOperation, FlashOperationResult};
 
 pub const WEB_TASK_POOL_SIZE: usize = CONFIG.rest.max_concurrent_connections as usize;
 
@@ -235,7 +235,15 @@ async fn config_handler(
 ) -> Result<(response::StatusCode, &'static str), ScreenBuildError> {
     info!("Validating config update");
     let config = config.0;
-    DISPLAY_CONFIG_SIGNAL.signal(Some(CheckedScreenConfig::new(config)?));
+    let checked_config = CheckedScreenConfig::new(config)?;
+    // These don't really belong here, but this is cheap and quick to do here
+    if let Some(state) = checked_config.panel.on {
+        PANEL_ON.store(state, Ordering::Relaxed);
+    }
+    if let Some(state) = checked_config.panel.brightness {
+        BRIGHTNESS.store(state, Ordering::Relaxed);
+    }
+    DISPLAY_CONFIG_SIGNAL.signal(Some(checked_config));
     Ok((response::StatusCode::OK, "Config updated"))
 }
 

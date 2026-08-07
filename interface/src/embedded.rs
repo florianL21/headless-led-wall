@@ -2,7 +2,7 @@ use core::iter::repeat;
 
 use super::TextStyle;
 use crate::{
-    Alignment, Configuration, Element, FontName, GlobalStylesType, Overlay, Point, Screen,
+    Alignment, Configuration, Element, FontName, GlobalStylesType, Overlay, Panel, Point, Screen,
     ScrollAnimation, Size,
 };
 use alloc::boxed::Box;
@@ -31,6 +31,7 @@ pub struct CheckedScreenConfig {
     pub screen: Screen,
     pub overlay: Option<Overlay>,
     pub styles: BuiltTextStyles,
+    pub panel: Panel,
 }
 
 impl CheckedScreenConfig {
@@ -41,6 +42,7 @@ impl CheckedScreenConfig {
             screen: config.screen,
             overlay: config.overlay,
             styles,
+            panel: config.panel,
         })
     }
 }
