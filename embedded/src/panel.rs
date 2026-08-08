@@ -3,8 +3,10 @@ use crate::ui::Renderer;
 use crate::wifi::CURRENT_STATE;
 use crate::{CONFIG, DEBUG_DISPLAY};
 use average::{Estimate, Variance};
-use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use core::sync::atomic::{AtomicBool, Ordering};
 use embassy_executor::task;
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use embassy_sync::signal::Signal;
 use embassy_time::{Duration, Instant, Ticker};
 use embedded_graphics::pixelcolor::Rgb888;
 use embedded_graphics::prelude::{Dimensions, DrawTarget, RgbColor};
@@ -42,7 +44,7 @@ const FPS_INTERVAL: Duration = Duration::from_secs(1);
 
 pub static PANEL_ON: AtomicBool = AtomicBool::new(true);
 pub static SYSTEM_IS_UP: AtomicBool = AtomicBool::new(false);
-pub static BRIGHTNESS: AtomicU8 = AtomicU8::new(CONFIG.panel.initial_brightness as u8);
+pub static BRIGHTNESS: Signal<CriticalSectionRawMutex, u8> = Signal::new();
 
 type InnerFB = DmaFrameBuffer<NROWS, FB_COLS, PLANES>;
 type Remapper = ChainTopRightDown<PANEL_ROWS, PANEL_COLS, TILED_ROWS, TILED_COLS>;
@@ -114,7 +116,7 @@ pub async fn hub75_task(
     flash: &'static FlashType,
 ) {
     info!("hub75_task: starting!");
-    let mut brightness = BRIGHTNESS.load(Ordering::Relaxed);
+    let mut brightness = CONFIG.panel.initial_brightness as u8;
 
     let tx_descriptors = esp_hub75::hub75_dma_descriptors!(InnerFB);
 
@@ -178,7 +180,16 @@ pub async fn hub75_task(
         transfer_jitter.add((transfer_start - last_transfer_end).as_micros() as f64);
 
         let curr_on_state = PANEL_ON.load(Ordering::Relaxed);
-        brightness = BRIGHTNESS.load(Ordering::Relaxed);
+        if BRIGHTNESS.signaled() {
+            brightness = BRIGHTNESS.wait().await;
+
+            // Handle the brightness being changed while the panel is on
+            if panel_is_on {
+                let res = channel0.start_duty_fade(prev_state, brightness, 300);
+                info!("Panel brightness adjust result: {res:?}");
+            }
+        }
+        // handle the panel being turned on or off
         if curr_on_state != panel_is_on {
             if curr_on_state {
                 let res = channel0.start_duty_fade(prev_state, brightness, 300);

@@ -144,7 +144,7 @@ struct SettingsQuery {
 }
 
 async fn settings_handler(settings: Query<SettingsQuery>) -> (response::StatusCode, &'static str) {
-    BRIGHTNESS.store(settings.0.brightness, Ordering::Relaxed);
+    BRIGHTNESS.signal(settings.0.brightness);
     (response::StatusCode::OK, "Settings updated")
 }
 
@@ -241,7 +241,7 @@ async fn config_handler(
         PANEL_ON.store(state, Ordering::Relaxed);
     }
     if let Some(state) = checked_config.panel.brightness {
-        BRIGHTNESS.store(state, Ordering::Relaxed);
+        BRIGHTNESS.signal(state);
     }
     DISPLAY_CONFIG_SIGNAL.signal(Some(checked_config));
     Ok((response::StatusCode::OK, "Config updated"))
