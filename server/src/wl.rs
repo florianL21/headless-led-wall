@@ -36,7 +36,7 @@ pub struct Response {
 pub struct Monitor {
     monitors: Vec<MonitorData>,
     #[serde(rename = "trafficInfos")]
-    traffic_infos: Vec<TrafficInfo>,
+    traffic_infos: Option<Vec<TrafficInfo>>,
 }
 
 #[allow(dead_code)]

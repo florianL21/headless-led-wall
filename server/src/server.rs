@@ -1,5 +1,7 @@
 use anyhow::Result;
+use interface::Configuration;
 use log::{error, info};
+use reqwest::Client;
 use std::net::Ipv4Addr;
 use tokio::select;
 use tokio::sync::mpsc::{Receiver, Sender};
@@ -7,7 +9,7 @@ use tokio::time::{self, Duration};
 use tokio_util::sync::CancellationToken;
 
 use crate::config::ServerConfig;
-use crate::display::build_display;
+use crate::display::{build_display, build_error_display};
 use crate::weather::{WeatherData, WeatherUpdateResult, get_weather_data};
 use crate::wl::{TransportData, get_transport_data};
 
@@ -18,6 +20,7 @@ const RETRY_POLL_RATE: Duration = Duration::from_secs(5);
 
 pub enum DataUpdate {
     Transport(TransportData),
+    TransportFailure(String),
     Weather(WeatherData),
     Ping,
 }
@@ -43,6 +46,16 @@ pub async fn fetch_transport_data(
         match get_transport_data(client, &station_query, &config.line_filter).await {
             Err(e) => {
                 error!("Failed to fetch transport data: {e}");
+                if let Err(e) = tx
+                    .send(DataUpdate::TransportFailure(format!(
+                        "Failed to fetch transport data: {e}"
+                    )))
+                    .await
+                {
+                    // Assume shutdown of the server.
+                    info!("Channel closed ({e}), stopping fetch_transport_data task.");
+                    return Ok(());
+                }
             }
             Ok(data) => {
                 if let Some(ref last_data) = last_data
@@ -136,6 +149,45 @@ pub async fn maintain_display(token: CancellationToken, tx: Sender<DataUpdate>) 
     }
 }
 
+enum UpdateError {
+    SerializeError,
+    SendError,
+}
+
+async fn send_display_config(
+    display_data: &Configuration,
+    client: &Client,
+    ip: &Ipv4Addr,
+) -> Result<(), UpdateError> {
+    let buf = postcard::to_allocvec(display_data);
+    let buf = match buf {
+        Ok(buf) => buf,
+        Err(e) => {
+            error!("Failed to serialize display data: {e}");
+            return Err(UpdateError::SerializeError);
+        }
+    };
+    let res = client
+        .post(format!("http://{ip}/api/config"))
+        .body(buf)
+        .timeout(Duration::from_secs(3))
+        .send()
+        .await;
+    let resp = match res {
+        Ok(resp) => resp,
+        Err(e) => {
+            error!("Failed to send display data: {e}");
+            return Err(UpdateError::SendError);
+        }
+    };
+    if !resp.status().is_success() {
+        error!("Display responded with error: {:?}", resp.text().await);
+        Err(UpdateError::SendError)
+    } else {
+        Ok(())
+    }
+}
+
 pub async fn push_display_update(
     token: CancellationToken,
     ip: Ipv4Addr,
@@ -143,6 +195,7 @@ pub async fn push_display_update(
 ) -> Result<()> {
     let mut current_weather = None;
     let mut current_transport = None;
+    let mut failure_message = None;
     let mut last_send_failed = false;
     let mut retry_ticker = time::interval(RETRY_POLL_RATE);
     let client = reqwest::Client::new();
@@ -161,6 +214,10 @@ pub async fn push_display_update(
                     }
                     DataUpdate::Transport(data) => {
                         current_transport = Some(data);
+                        failure_message = None;
+                    }
+                    DataUpdate::TransportFailure(message) => {
+                        failure_message = Some(message);
                     }
                     DataUpdate::Ping => {
                         // This is here to trigger a screen refresh
@@ -178,39 +235,28 @@ pub async fn push_display_update(
             }
         };
 
-        if let Some(current_weather) = &current_weather
+        let display_data = if let Some(msg) = &failure_message {
+            Some(build_error_display(msg))
+        } else if let Some(current_weather) = &current_weather
             && let Some(current_transport) = &current_transport
         {
-            let display_data = build_display(current_weather, current_transport);
-            let buf = postcard::to_allocvec(&display_data);
-            let buf = match buf {
-                Ok(buf) => buf,
-                Err(e) => {
-                    error!("Failed to serialize display data: {e}");
+            Some(build_display(current_weather, current_transport))
+        } else {
+            None
+        };
+        if let Some(display_data) = display_data {
+            match send_display_config(&display_data, &client, &ip).await {
+                Ok(()) => {
+                    last_send_failed = false;
+                }
+                Err(UpdateError::SerializeError) => {
                     continue;
                 }
-            };
-            let res = client
-                .post(format!("http://{ip}/api/config"))
-                .body(buf)
-                .timeout(Duration::from_secs(3))
-                .send()
-                .await;
-            let resp = match res {
-                Ok(resp) => resp,
-                Err(e) => {
-                    error!("Failed to send display data: {e}");
+                Err(UpdateError::SendError) => {
                     last_send_failed = true;
                     continue;
                 }
-            };
-            if !resp.status().is_success() {
-                error!("Display responded with error: {:?}", resp.text().await);
-                last_send_failed = true;
-                continue;
             }
         }
-
-        last_send_failed = false;
     }
 }

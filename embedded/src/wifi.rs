@@ -5,8 +5,9 @@ use embassy_time::{Duration, Timer};
 use esp_radio::wifi::{Interface, WifiController, WifiError};
 use log::{error, info, warn};
 
-use crate::rest::LAST_REST_UPDATE;
+use crate::{CONFIG, rest::LAST_REST_UPDATE};
 
+const UPDATE_TIMEOUT: u64 = CONFIG.rest.update_watchdog_timeout as u64;
 pub static CURRENT_STATE: CurrentStateSignal = CurrentStateSignal::new();
 static RECONNECT_TRIGGER: Signal<CriticalSectionRawMutex, ()> = Signal::new();
 
@@ -70,7 +71,7 @@ pub async fn net_task(mut runner: Runner<'static, Interface>) {
 pub async fn connection_watchdog() {
     loop {
         let updated = LAST_REST_UPDATE.wait();
-        let timeout = Timer::after(Duration::from_secs(600));
+        let timeout = Timer::after(Duration::from_secs(UPDATE_TIMEOUT));
         match select(updated, timeout).await {
             Either::First(_) => {}
             Either::Second(_) => RECONNECT_TRIGGER.signal(()),

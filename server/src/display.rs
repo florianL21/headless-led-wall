@@ -12,6 +12,33 @@ fn map(x: f32, in_min: f32, in_max: f32, out_min: i32, out_max: i32) -> i32 {
     ((x - in_min) * (out_max - out_min) as f32 / (in_max - in_min)) as i32 + out_min
 }
 
+pub fn build_error_display(msg: &String) -> Configuration {
+    let mut iter = msg.chars().peekable();
+    let mut count = 0;
+    let iter_with_newlines = std::iter::from_fn(move || match iter.peek() {
+        Some(_) => {
+            if count < 37 {
+                count += 1;
+                iter.next()
+            } else {
+                count = 0;
+                Some('\n')
+            }
+        }
+        None => None,
+    });
+    Configuration::new(Screen::new(
+        vec![Element::new_text(
+            "text",
+            iter_with_newlines.collect(),
+            Point::new(2, 8),
+        )],
+        192,
+        96,
+    ))
+    .add_style("text", TextStyle::new("FFFF00", FontName::Font5X7))
+}
+
 pub fn build_display(weather_data: &WeatherData, transport_data: &TransportData) -> Configuration {
     let now = Local::now();
     // Render Wiener linien data
