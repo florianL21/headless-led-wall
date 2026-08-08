@@ -31,6 +31,7 @@ pub type DisplayConfigSignal = Signal<CriticalSectionRawMutex, Option<CheckedScr
 pub static DISPLAY_CONFIG_SIGNAL: DisplayConfigSignal = Signal::new();
 static PICOSERVE_CONFIG: picoserve::Config =
     picoserve::Config::const_default().keep_connection_alive();
+pub static LAST_REST_UPDATE: Signal<CriticalSectionRawMutex, ()> = Signal::new();
 
 pub struct AppProps;
 
@@ -134,6 +135,7 @@ struct PanelStateQuery {
 }
 
 async fn on_off_handler(on: Query<PanelStateQuery>) -> (response::StatusCode, &'static str) {
+    LAST_REST_UPDATE.signal(());
     PANEL_ON.store(on.0.on, Ordering::Relaxed);
     (response::StatusCode::OK, "State updated")
 }
@@ -144,11 +146,13 @@ struct SettingsQuery {
 }
 
 async fn settings_handler(settings: Query<SettingsQuery>) -> (response::StatusCode, &'static str) {
+    LAST_REST_UPDATE.signal(());
     BRIGHTNESS.signal(settings.0.brightness);
     (response::StatusCode::OK, "Settings updated")
 }
 
 async fn format_handler() -> (response::StatusCode, String) {
+    LAST_REST_UPDATE.signal(());
     DISPLAY_CONFIG_SIGNAL.signal(None);
 
     FLASH_OPERATION.send(FlashOperation::Format).await;
@@ -170,6 +174,7 @@ struct FlashKey {
 }
 
 async fn upload_handler(key: Query<FlashKey>, data: RawData) -> (response::StatusCode, String) {
+    LAST_REST_UPDATE.signal(());
     // info!("Got data: {:?}", data.0);
     let result = postcard::from_bytes::<Resource>(&data.0);
     if let Err(e) = result {
@@ -191,6 +196,7 @@ async fn upload_handler(key: Query<FlashKey>, data: RawData) -> (response::Statu
 }
 
 async fn exists_handler(key: Query<FlashKey>) -> (response::StatusCode, String) {
+    LAST_REST_UPDATE.signal(());
     FLASH_OPERATION
         .send(FlashOperation::Exists(key.0.key))
         .await;
@@ -213,6 +219,7 @@ async fn exists_handler(key: Query<FlashKey>) -> (response::StatusCode, String) 
 }
 
 async fn delete_handler(key: Query<FlashKey>) -> (response::StatusCode, String) {
+    LAST_REST_UPDATE.signal(());
     FLASH_OPERATION
         .send(FlashOperation::Delete(key.0.key))
         .await;
@@ -234,6 +241,7 @@ async fn config_handler(
     config: Postcard<Configuration>,
 ) -> Result<(response::StatusCode, &'static str), ScreenBuildError> {
     info!("Validating config update");
+    LAST_REST_UPDATE.signal(());
     let config = config.0;
     let checked_config = CheckedScreenConfig::new(config)?;
     // These don't really belong here, but this is cheap and quick to do here

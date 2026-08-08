@@ -20,7 +20,7 @@ async fn main() {
 mod tests {
     use std::{collections::BTreeMap, fs::File, io::BufReader};
 
-    use interface::{Configuration, Element, FontName, Point, Screen, TextStyle};
+    use interface::{Configuration, Element, FontName, Panel, Point, Screen, TextStyle};
     use jsonschema;
     use schemars::schema_for;
     use serde_json;
@@ -50,14 +50,22 @@ mod tests {
                     strikethrough: None,
                 },
             )]),
-            screens: vec![Screen {
+            screen: Screen {
                 elements: vec![Element::Text {
                     position: Point { x: 50, y: 20 },
                     style: "style".into(),
                     text: "content".into(),
                     align: None,
                 }],
-            }],
+                canvas_size: interface::Size::new(64, 32),
+                screen_size: interface::Size::new(64, 32),
+                scroll_animation: interface::ScrollAnimation::Still,
+            },
+            overlay: None,
+            panel: Panel {
+                brightness: None,
+                on: None,
+            },
         };
         let buf = postcard::to_allocvec(&config).unwrap();
         let config2: Configuration = postcard::from_bytes(&buf).unwrap();

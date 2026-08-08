@@ -24,7 +24,7 @@ use headless_display::CONFIG;
 use headless_display::flash::{FlashType, flash_init, flash_task};
 use headless_display::panel::init_led_panel;
 use headless_display::rest::{AppProps, WEB_TASK_POOL_SIZE, web_task};
-use headless_display::wifi::CURRENT_STATE;
+use headless_display::wifi::{CURRENT_STATE, connection_watchdog};
 use headless_display::{
     panel::{Hub75Peripherals, hub75_task},
     wifi::{SystemState, connection, net_task},
@@ -198,6 +198,7 @@ async fn main(spawner: Spawner) {
     for id in 0..WEB_TASK_POOL_SIZE {
         spawner.spawn(web_task(id, stack, app).expect("Failed to instantiate web task"));
     }
+    spawner.spawn(connection_watchdog().expect("Failed to instantiate wifi watchdog task"));
 
     // loop {
     //     let stats = esp_alloc::HEAP.stats();
