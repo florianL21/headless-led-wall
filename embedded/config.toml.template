@@ -35,3 +35,6 @@ initial_brightness = 15
 
 # Max number of connections that can be open at the same time
 max_concurrent_connections = 2
+
+# If no update was received from the REST API after this number of seconds, a connection reset will be performed
+update_watchdog_timeout = 600

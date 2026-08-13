@@ -33,8 +33,5 @@ ESP_LOG = "info"
 # If you have a single sprite which is bigger than 10240 bytes, you can change increase this value
 EKV_MAX_VALUE_SIZE = "10240"
 
-# If your ESP32 does not have an octal PSRAM make sure you comment the following line. If your PSRAM fails to mount this is the first thing to try
-# ESP_HAL_CONFIG_PSRAM_MODE = "octal"
-
 [unstable]
 build-std = ["alloc", "core"]

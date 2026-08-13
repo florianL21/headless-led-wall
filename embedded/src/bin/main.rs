@@ -18,6 +18,7 @@ use esp_hal::ram;
 use esp_hal::rng::Rng;
 use esp_hal::{clock::CpuClock, timer::timg::TimerGroup};
 use esp_hub75::Hub75Pins8;
+use esp_println::println;
 use esp_radio::wifi::sta::StationConfig;
 use esp_radio::wifi::{self, ControllerConfig};
 use headless_display::CONFIG;
@@ -29,7 +30,7 @@ use headless_display::{
     panel::{Hub75Peripherals, hub75_task},
     wifi::{SystemState, connection, net_task},
 };
-use log::info;
+use log::{LevelFilter, info};
 use picoserve::{AppBuilder, AppRouter};
 use static_cell::StaticCell;
 
@@ -44,9 +45,54 @@ const TARGET_PANEL_FRAME_RATE: u32 = CONFIG.panel.target_fps as u32;
 const SSID: &str = CONFIG.wifi.ssid;
 const PASSWORD: &str = CONFIG.wifi.password;
 
+struct CustomLogger;
+
+impl log::Log for CustomLogger {
+    fn enabled(&self, _metadata: &log::Metadata) -> bool {
+        true
+    }
+
+    fn log(&self, record: &log::Record) {
+        print_log_record(record);
+    }
+
+    fn flush(&self) {}
+}
+
+fn print_log_record(record: &log::Record) {
+    const RESET: &str = "\u{001B}[0m";
+    const RED: &str = "\u{001B}[31m";
+    const GREEN: &str = "\u{001B}[32m";
+    const YELLOW: &str = "\u{001B}[33m";
+    const BLUE: &str = "\u{001B}[34m";
+    const CYAN: &str = "\u{001B}[35m";
+
+    let color = match record.level() {
+        log::Level::Error => RED,
+        log::Level::Warn => YELLOW,
+        log::Level::Info => GREEN,
+        log::Level::Debug => BLUE,
+        log::Level::Trace => CYAN,
+    };
+    let reset = RESET;
+
+    println!(
+        "{}{} [{}:{}] - {}{}",
+        color,
+        record.level(),
+        record.file().unwrap_or_default(),
+        record.line().unwrap_or_default(),
+        record.args(),
+        reset
+    );
+}
+
 #[esp_rtos::main]
 async fn main(spawner: Spawner) {
-    esp_println::logger::init_logger_from_env();
+    unsafe {
+        log::set_logger_racy(&CustomLogger).unwrap();
+        log::set_max_level_racy(LevelFilter::Info);
+    }
 
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
 

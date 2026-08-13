@@ -30,7 +30,7 @@ pub type DisplayConfigSignal = Signal<CriticalSectionRawMutex, Option<CheckedScr
 
 pub static DISPLAY_CONFIG_SIGNAL: DisplayConfigSignal = Signal::new();
 static PICOSERVE_CONFIG: picoserve::Config =
-    picoserve::Config::const_default().keep_connection_alive();
+    picoserve::Config::const_default().close_connection_after_response();
 pub static LAST_REST_UPDATE: Signal<CriticalSectionRawMutex, ()> = Signal::new();
 
 pub struct AppProps;
