@@ -150,6 +150,10 @@ pub fn build_display(weather_data: &WeatherData, transport_data: &TransportData)
 
     overlay_elements.push(Element::new_polyline(graph_points, "FFFFFF"));
 
+    if y_offset < 96 {
+        y_offset = 96;
+    }
+
     Configuration::new(
         Screen::new(lines_elements, 192, 96)
             .with_canvas_size(192, y_offset as u32)
